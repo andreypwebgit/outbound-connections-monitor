@@ -2,9 +2,9 @@
 
 Visibilidad humana y contexto técnico sobre conexiones salientes para sistemas Windows.
 
-## 🏗 Arquitectura Actual (v0.1)
+## 🏗 Arquitectura Actual (v0.2)
 
-El proyecto está diseñado bajo los estrictos requerimientos de simplicidad operativa, evitando la sobrecarga tecnológica ("bloatware").
+El proyecto está diseñado bajo los estrictos requerimientos de simplicidad operativa, evitando la sobrecarga tecnológica ("bloatware"). Se rige por el principio de **Zero Trust** (Confianza Cero).
 
 *   **Core Backend (Rust):** Lógica pesada, gestión de memoria segura, y acceso al sistema. Dividido en módulos puros:
     *   `Collector`: Captura de estado de red nativo.
@@ -18,11 +18,14 @@ El proyecto está diseñado bajo los estrictos requerimientos de simplicidad ope
 
 ---
 
-## ✨ Funcionalidades Actuales (v0.1)
+## ✨ Funcionalidades Actuales (v0.2)
 
 *   **Escaneo "On-Demand" (Scan Now):** Captura fotográfica de las conexiones TCP/UDP activas y establecidas del sistema en el momento de la ejecución.
-*   **Asociación de Procesos:** Vinculación de puertos locales y remotos con el `PID` y la ruta en disco del ejecutable responsable (`wmic`/`netstat`).
-*   **Clasificación de Riesgo:** Evaluación heurística básica asignando "Bands" (ej. `KNOWN_SAFE`, `POTENTIALLY_DANGEROUS`) basado en la ubicación del binario y la información inicial.
+*   **Asociación de Procesos y Servicios:** Vinculación de puertos locales y remotos con el `PID`, la ruta en disco del ejecutable responsable, y el **Servicio de Windows** asociado si aplica (útil para `svchost.exe`).
+*   **Identidad y Firmas (Authenticode):** Validación criptográfica del binario para confirmar si está firmado por una entidad legítima (ej. Microsoft).
+*   **Clasificación de Riesgo Explicable:** Evaluación heurística básica asignando "Bands" (ej. `KNOWN_SAFE`, `POTENTIALLY_DANGEROUS`) basado en la ubicación del binario, firmas digitales y memoria histórica, mostrando las justificaciones detalladas en la UI.
+*   **Memoria Histórica (Baseline):** Uso de base de datos SQLite persistente para recordar la primera y última vez que un binario realizó una conexión, detectando desviaciones de comportamiento.
+*   **Panel Interactivo (UI):** Filtrado visual por nivel de riesgo y paneles desplegables de contexto para cada conexión.
 *   **Exportación Local:** Generación de un reporte JSON completo de todos los hallazgos al finalizar el escaneo.
 
 ---

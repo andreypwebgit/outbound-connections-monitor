@@ -259,3 +259,14 @@ Este proyecto debe salir:
 La misión del agente no es impresionar.
 La misión del agente es **obedecer bien, construir limpio y no desmadrarse**.
 
+---
+
+## 12. Política de Zero Trust (Confianza Cero)
+
+En el ámbito de seguridad y para este proyecto en particular, rige el principio:
+**"Todas las conexiones son sospechosas (potencialmente peligrosas) hasta que se demuestre lo contrario"**.
+
+Esto implica:
+- Las clasificaciones de `KNOWN_SAFE` deben ganarse a base de pruebas (firmas criptográficas válidas, baselines históricos maduros).
+- En la interfaz, la información nunca debe ocultarse por defecto asumiendo que es inofensiva. Todo se muestra y el usuario filtra manualmente.
+- Ante la duda técnica o falta de información fiable sobre un binario o servicio, la heurística siempre debe empujar la puntuación de riesgo hacia arriba (`REVIEW` o `DANGER`).
