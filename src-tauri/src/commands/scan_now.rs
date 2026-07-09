@@ -1,6 +1,7 @@
 use std::time::SystemTime;
 use chrono::{DateTime, Utc};
 use tauri::command;
+use dns_lookup::lookup_addr;
 
 use crate::core::collector::Collector;
 use crate::core::enricher::{Enricher, SystemProcessMap, TrustCache};
@@ -40,10 +41,19 @@ pub async fn scan_now(state: tauri::State<'_, crate::core::storage::Storage>) ->
             port: obs.local_port,
         };
         
+        let mut hostname = None;
+        if obs.remote_ip != "0.0.0.0" && obs.remote_ip != "127.0.0.1" && !obs.remote_ip.starts_with("192.168.") && !obs.remote_ip.starts_with("10.") {
+            if let Ok(ip_addr) = obs.remote_ip.parse::<std::net::IpAddr>() {
+                if let Ok(name) = lookup_addr(&ip_addr) {
+                    hostname = Some(name);
+                }
+            }
+        }
+        
         let remote = RemoteEndpoint {
-            ip: obs.remote_ip,
+            ip: obs.remote_ip.clone(),
             port: obs.remote_port,
-            hostname: None, // Omitimos resolución inversa DNS por defecto en v0.1 para evitar latencia excesiva
+            hostname,
             root_domain: None,
             asn_org: None,
             country: None,
