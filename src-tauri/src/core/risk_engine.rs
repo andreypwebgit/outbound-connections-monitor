@@ -27,16 +27,62 @@ impl RiskEngine {
         match process.path_class.as_str() {
             "Temp" | "Downloads" => {
                 score += 30;
-                reason_codes.push("UNUSUAL_PATH".to_string());
+                reason_codes.push("EXECUTING_FROM_TEMP_OR_DOWNLOADS".to_string());
             },
             "Windows" => {
-                // System processes should be signed. If not, high risk.
                 if trust.signature_status != "Valid" {
                     score += 60;
                     reason_codes.push("UNSIGNED_SYSTEM_PROCESS".to_string());
+                } else if let Some(subject) = &trust.signer_subject {
+                    if !subject.to_lowercase().contains("microsoft") {
+                        score += 40;
+                        reason_codes.push("SYSTEM_PATH_BUT_NOT_MICROSOFT".to_string());
+                    } else {
+                        reason_codes.push("VALID_MICROSOFT_SIGNATURE".to_string());
+                    }
                 }
             },
             _ => {}
+        }
+        
+        // 1.5 Advanced Heuristics (v0.3)
+        // Suspicious Command Line
+        if let Some(cmd) = &process.command_line {
+            let cmd_lower = cmd.to_lowercase();
+            if cmd_lower.contains("-enc") || cmd_lower.contains("-encodedcommand") || 
+               cmd_lower.contains("bypass") || cmd_lower.contains("hidden") ||
+               cmd_lower.contains("nop") || cmd_lower.contains("noninteractive") ||
+               cmd_lower.contains("iex") || cmd_lower.contains("invoke-expression") {
+                score += 60;
+                reason_codes.push("SUSPICIOUS_COMMAND_LINE".to_string());
+            }
+        }
+        
+        // Suspicious Parent Process
+        if let Some(parent) = &process.parent_name {
+            let p_lower = parent.to_lowercase();
+            if p_lower.contains("winword.exe") || p_lower.contains("excel.exe") || 
+               p_lower.contains("powerpnt.exe") || p_lower.contains("outlook.exe") {
+                score += 80;
+                reason_codes.push("OFFICE_SPAWNED_NETWORK_PROCESS".to_string());
+            } else if p_lower.contains("wscript.exe") || p_lower.contains("cscript.exe") {
+                score += 70;
+                reason_codes.push("SCRIPT_SPAWNED_NETWORK_PROCESS".to_string());
+            }
+        }
+        
+        // Suspicious User Context
+        if let Some(user) = &process.user {
+            let u_lower = user.to_lowercase();
+            let proc_lower = process.name.to_lowercase();
+            // Si SYSTEM ejecuta procesos típicamente de usuario
+            if u_lower.contains("system") {
+                if proc_lower.contains("chrome.exe") || proc_lower.contains("edge.exe") || 
+                   proc_lower.contains("firefox.exe") || proc_lower.contains("explorer.exe") {
+                    score += 75;
+                    reason_codes.push("USER_PROCESS_AS_SYSTEM".to_string());
+                }
+            }
         }
         
         // 2. Trust Checks
