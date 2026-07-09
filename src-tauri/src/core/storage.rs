@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use chrono::Utc;
 use crate::core::errors::AppError;
-use crate::core::models::{BaselineInfo, ScanNowResponse, Finding};
+use crate::core::models::{BaselineInfo, ScanNowResponse};
 
 pub struct Storage {
     pub conn: Mutex<Connection>,
