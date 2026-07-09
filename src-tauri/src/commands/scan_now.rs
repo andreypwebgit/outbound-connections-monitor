@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use tauri::command;
 
 use crate::core::collector::Collector;
-use crate::core::enricher::{Enricher, SystemProcessMap};
+use crate::core::enricher::{Enricher, SystemProcessMap, TrustCache};
 use crate::core::risk_engine::RiskEngine;
 use crate::core::baseline_manager::BaselineManager;
 use crate::core::exporter::Exporter;
@@ -24,6 +24,8 @@ pub async fn scan_now() -> Result<ScanNowResponse, String> {
     // 2. Collect raw observations (active outbound connections)
     let raw_observations = Collector::collect_active_connections()
         .map_err(|e| e.to_string())?;
+        
+    let mut trust_cache = TrustCache::new();
         
     let mut findings = Vec::new();
     let mut summary = ScanSummary::default();
@@ -49,7 +51,7 @@ pub async fn scan_now() -> Result<ScanNowResponse, String> {
         
         let process_info = Enricher::get_process_info(obs.pid, &process_map);
         let binary_identity = Enricher::get_binary_identity(process_info.path.as_ref());
-        let trust_info = Enricher::get_trust_info(process_info.path.as_ref());
+        let trust_info = Enricher::get_trust_info(process_info.path.as_ref(), &mut trust_cache);
         
         let baseline = BaselineManager::get_baseline_for_identity(binary_identity.sha256.as_ref());
         

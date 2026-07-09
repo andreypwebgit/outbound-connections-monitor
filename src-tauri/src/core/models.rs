@@ -72,6 +72,7 @@ pub struct ProcessInfo {
     pub path_class: String,
     pub file_missing: bool,
     pub orphaned: bool,
+    pub services: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
