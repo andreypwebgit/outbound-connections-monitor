@@ -47,6 +47,29 @@ npx tauri dev
 
 ---
 
+## 🏃‍♂️ Chuleta de Ejecución (Quick Start v0.1)
+
+Sigue estos pasos para probar la herramienta en su estado actual:
+
+1. **Abrir terminal con privilegios:**
+   Busca **PowerShell** en el menú de inicio, haz clic derecho y selecciona **"Ejecutar como Administrador"**. Esto es necesario para leer la ruta de procesos protegidos como `System` o `svchost`.
+2. **Navegar a la carpeta:**
+   ```powershell
+   cd "C:\Users\andre\Documents\Profesional apwebai\AI\Professional-Projects\windows-outbound-connections-monitor\out-cxns-monitor"
+   ```
+3. **Iniciar la aplicación:**
+   ```powershell
+   npx tauri dev
+   ```
+4. **Probar la interfaz:**
+   En la ventana de la aplicación que se abre, haz clic en **"Scan Now"**.
+5. **Revisar datos en bruto (opcional):**
+   Puedes inspeccionar los archivos `src-tauri/last_scan.json` y `src-tauri/ocm_baseline.db` que se generan localmente tras el escaneo.
+6. **Cerrar el entorno:**
+   Cierra la ventana de la aplicación y pulsa **`Ctrl + C`** en PowerShell para detener los procesos en segundo plano.
+
+---
+
 ## 🛠 Troubleshooting (Solución de problemas frecuentes)
 
 *   **Error:** `failed to run 'cargo metadata'... program not found`
