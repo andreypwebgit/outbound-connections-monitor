@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.repo/docs/scan-now-contract.json",
+  "title": "ScanNowResponse",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scan_id",
+    "schema_version",
+    "started_at",
+    "finished_at",
+    "duration_ms",
+    "host",
+    "summary",
+    "findings"
+  ],
+  "properties": {
+    "scan_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "v1"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "hostname", "app_version"],
+      "properties": {
+        "platform": {
+          "type": "string",
+          "const": "windows"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "app_version": {
+          "type": "string"
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_observations",
+        "accepted_count",
+        "review_count",
+        "danger_count",
+        "unknown_count",
+        "candidate_count",
+        "revalidation_count",
+        "orphaned_count"
+      ],
+      "properties": {
+        "total_observations": { "type": "integer", "minimum": 0 },
+        "accepted_count": { "type": "integer", "minimum": 0 },
+        "review_count": { "type": "integer", "minimum": 0 },
+        "danger_count": { "type": "integer", "minimum": 0 },
+        "unknown_count": { "type": "integer", "minimum": 0 },
+        "candidate_count": { "type": "integer", "minimum": 0 },
+        "revalidation_count": { "type": "integer", "minimum": 0 },
+        "orphaned_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "finding_id",
+          "protocol",
+          "state",
+          "local",
+          "remote",
+          "process",
+          "binary_identity",
+          "trust",
+          "baseline",
+          "affinity",
+          "intel",
+          "risk"
+        ],
+        "properties": {
+          "finding_id": { "type": "string" },
+          "protocol": { "type": "string" },
+          "state": { "type": "string" },
+          "local": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ip", "port"],
+            "properties": {
+              "ip": { "type": "string" },
+              "port": { "type": "integer", "minimum": 0, "maximum": 65535 }
+            }
+          },
+          "remote": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ip", "port", "hostname", "root_domain", "asn_org", "country"],
+            "properties": {
+              "ip": { "type": "string" },
+              "port": { "type": "integer", "minimum": 0, "maximum": 65535 },
+              "hostname": { "type": ["string", "null"] },
+              "root_domain": { "type": ["string", "null"] },
+              "asn_org": { "type": ["string", "null"] },
+              "country": { "type": ["string", "null"] }
+            }
+          },
+          "process": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pid", "name", "started_at", "path", "path_class", "file_missing", "orphaned"],
+            "properties": {
+              "pid": { "type": "integer", "minimum": 0 },
+              "name": { "type": "string" },
+              "started_at": { "type": ["string", "null"], "format": "date-time" },
+              "path": { "type": ["string", "null"] },
+              "path_class": {
+                "type": "string",
+                "enum": ["Windows", "ProgramFiles", "ProgramFilesX86", "AppData", "Temp", "Downloads", "Desktop", "UserProfile", "Other", "Missing"]
+              },
+              "file_missing": { "type": "boolean" },
+              "orphaned": { "type": "boolean" }
+            }
+          },
+          "binary_identity": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["volume_serial", "file_id", "file_size", "last_write_time", "sha256", "hash_source"],
+            "properties": {
+              "volume_serial": { "type": ["string", "null"] },
+              "file_id": { "type": ["string", "null"] },
+              "file_size": { "type": "integer", "minimum": 0 },
+              "last_write_time": { "type": ["string", "null"], "format": "date-time" },
+              "sha256": { "type": ["string", "null"] },
+              "hash_source": {
+                "type": ["string", "null"],
+                "enum": ["cache", "fresh", null]
+              }
+            }
+          },
+          "trust": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["signature_status", "signature_source", "signer_subject", "signer_thumbprint", "chain_status"],
+            "properties": {
+              "signature_status": {
+                "type": "string",
+                "enum": ["Valid", "Invalid", "Unsigned", "Unknown"]
+              },
+              "signature_source": {
+                "type": "string",
+                "enum": ["embedded", "catalog", "none", "unknown"]
+              },
+              "signer_subject": { "type": ["string", "null"] },
+              "signer_thumbprint": { "type": ["string", "null"] },
+              "chain_status": {
+                "type": "string",
+                "enum": ["Trusted", "Untrusted", "Unknown"]
+              }
+            }
+          },
+          "baseline": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["state", "seen_count", "distinct_days", "first_seen", "last_seen", "manual_validation"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": [
+                  "Unknown",
+                  "Candidate",
+                  "Observed_Local",
+                  "Baseline_Provisional",
+                  "Baseline_Consolidated",
+                  "Revalidation_Required",
+                  "Potentially_Dangerous"
+                ]
+              },
+              "seen_count": { "type": "integer", "minimum": 0 },
+              "distinct_days": { "type": "integer", "minimum": 0 },
+              "first_seen": { "type": ["string", "null"], "format": "date-time" },
+              "last_seen": { "type": ["string", "null"], "format": "date-time" },
+              "manual_validation": { "type": "boolean" }
+            }
+          },
+          "affinity": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["score", "level", "matched_signals", "mismatched_signals"],
+            "properties": {
+              "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "level": {
+                "type": "string",
+                "enum": ["high", "medium", "low", "none"]
+              },
+              "matched_signals": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "mismatched_signals": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          },
+          "intel": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["consulted", "virustotal", "abuseipdb", "llm"],
+            "properties": {
+              "consulted": { "type": "boolean" },
+              "virustotal": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["consulted", "malicious_votes"],
+                "properties": {
+                  "consulted": { "type": "boolean" },
+                  "malicious_votes": { "type": ["integer", "null"], "minimum": 0 }
+                }
+              },
+              "abuseipdb": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["consulted", "abuse_confidence_score", "usage_type"],
+                "properties": {
+                  "consulted": { "type": "boolean" },
+                  "abuse_confidence_score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+                  "usage_type": { "type": ["string", "null"] }
+                }
+              },
+              "llm": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["consulted", "confidence", "summary"],
+                "properties": {
+                  "consulted": { "type": "boolean" },
+                  "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+                  "summary": { "type": ["string", "null"] }
+                }
+              }
+            }
+          },
+          "risk": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["score", "band", "reason_codes", "recommended_action"],
+            "properties": {
+              "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "band": {
+                "type": "string",
+                "enum": ["known_safe", "known_low", "known_moderate", "known_high", "potentially_dangerous"]
+              },
+              "reason_codes": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "recommended_action": {
+                "type": "string",
+                "enum": ["ignore", "observe", "review", "revalidate", "investigate"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

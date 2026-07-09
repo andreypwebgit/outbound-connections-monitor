@@ -1,0 +1,24 @@
+{
+  "name": "out-cxns-monitor",
+  "version": "1.0.0",
+  "description": "Aplicación de escritorio para **Windows** orientada a dar **visibilidad humana, contexto técnico y priorización de riesgo** sobre las **conexiones salientes activas** del equipo mediante un flujo **manual** de escaneo con `Scan Now`.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "npx @tailwindcss/cli -i ./src/css/input.css -o ./src/css/output.css --watch",
+    "build": "npx @tailwindcss/cli -i ./src/css/input.css -o ./src/css/output.css",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/cli": "^2.11.4",
+    "tailwindcss": "^4.3.2"
+  }
+}
