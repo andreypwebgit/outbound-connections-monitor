@@ -142,6 +142,13 @@ impl Storage {
 
         let conn = self.conn.lock().unwrap();
         conn.execute_batch(schema)?;
+        
+        // Migraciones v0.3 (ignoramos errores si ya existen)
+        let _ = conn.execute("ALTER TABLE network_observations ADD COLUMN ppid INTEGER", params![]);
+        let _ = conn.execute("ALTER TABLE network_observations ADD COLUMN parent_name TEXT", params![]);
+        let _ = conn.execute("ALTER TABLE network_observations ADD COLUMN command_line TEXT", params![]);
+        let _ = conn.execute("ALTER TABLE network_observations ADD COLUMN user_context TEXT", params![]);
+        
         Ok(())
     }
 
@@ -231,8 +238,8 @@ impl Storage {
         
         for finding in &response.findings {
             tx.execute(
-                "INSERT INTO network_observations (finding_id, scan_id, protocol, state, local_ip, local_port, remote_ip, remote_port, pid, process_name) 
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                "INSERT INTO network_observations (finding_id, scan_id, protocol, state, local_ip, local_port, remote_ip, remote_port, pid, process_name, ppid, parent_name, command_line, user_context) 
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
                 params![
                     finding.finding_id,
                     response.scan_id,
@@ -243,7 +250,11 @@ impl Storage {
                     finding.remote.ip,
                     finding.remote.port,
                     finding.process.pid,
-                    finding.process.name
+                    finding.process.name,
+                    finding.process.ppid,
+                    finding.process.parent_name,
+                    finding.process.command_line,
+                    finding.process.user
                 ]
             )?;
             
