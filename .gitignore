@@ -1,0 +1,4 @@
+node_modules/
+.DS_Store
+last_scan.json
+ocm_baseline.db

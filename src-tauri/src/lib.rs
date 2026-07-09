@@ -3,8 +3,8 @@ pub mod commands;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Inicializar SQLite aquí
-    let _storage = core::storage::Storage::new(std::path::PathBuf::from("ocm_baseline.db"))
+    // Inicializar SQLite aquí (fuera de src-tauri para evitar hot-reload loop en dev)
+    let _storage = core::storage::Storage::new(std::path::PathBuf::from("../ocm_baseline.db"))
         .expect("Failed to initialize local database");
 
     tauri::Builder::default()

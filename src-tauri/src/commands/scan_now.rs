@@ -125,8 +125,8 @@ pub async fn scan_now() -> Result<ScanNowResponse, String> {
         findings,
     };
     
-    // Export to JSON
-    let _ = Exporter::export_to_json(&response, "last_scan.json");
+    // Export to JSON outside src-tauri to prevent hot-reload loop
+    let _ = Exporter::export_to_json(&response, "../last_scan.json");
     
     Ok(response)
 }
