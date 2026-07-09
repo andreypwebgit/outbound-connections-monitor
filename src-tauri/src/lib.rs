@@ -8,6 +8,7 @@ pub fn run() {
         .expect("Failed to initialize local database");
 
     tauri::Builder::default()
+        .manage(_storage)
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
