@@ -73,6 +73,10 @@ pub struct ProcessInfo {
     pub file_missing: bool,
     pub orphaned: bool,
     pub services: Vec<String>,
+    pub ppid: Option<u32>,
+    pub parent_name: Option<String>,
+    pub command_line: Option<String>,
+    pub user: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
