@@ -13,7 +13,7 @@ use crate::core::models::{
 };
 
 #[command]
-pub async fn scan_now() -> Result<ScanNowResponse, String> {
+pub async fn scan_now(state: tauri::State<'_, crate::core::storage::Storage>) -> Result<ScanNowResponse, String> {
     let start_time = SystemTime::now();
     let started_at: DateTime<Utc> = start_time.into();
     
@@ -53,7 +53,7 @@ pub async fn scan_now() -> Result<ScanNowResponse, String> {
         let binary_identity = Enricher::get_binary_identity(process_info.path.as_ref());
         let trust_info = Enricher::get_trust_info(process_info.path.as_ref(), &mut trust_cache);
         
-        let baseline = BaselineManager::get_baseline_for_identity(binary_identity.sha256.as_ref());
+        let baseline = BaselineManager::get_baseline_for_identity(binary_identity.sha256.as_ref(), &state);
         
         // Mock affinity for v0.1 since we don't have historical data to compute it yet.
         let affinity = AffinityInfo {
@@ -129,6 +129,11 @@ pub async fn scan_now() -> Result<ScanNowResponse, String> {
     
     // Export to JSON outside src-tauri to prevent hot-reload loop
     let _ = Exporter::export_to_json(&response, "../last_scan.json");
+    
+    // Save to SQLite
+    if let Err(e) = state.save_scan_results(&response) {
+        eprintln!("Failed to save scan results to DB: {}", e);
+    }
     
     Ok(response)
 }
