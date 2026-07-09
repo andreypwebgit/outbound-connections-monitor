@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 use chrono::{DateTime, Utc};
-use tauri::command;
+use tauri::{command, Emitter};
 use dns_lookup::lookup_addr;
 
 use crate::core::collector::Collector;
@@ -14,14 +14,16 @@ use crate::core::models::{
 };
 
 #[command]
-pub async fn scan_now(state: tauri::State<'_, crate::core::storage::Storage>) -> Result<ScanNowResponse, String> {
+pub async fn scan_now(app: tauri::AppHandle, state: tauri::State<'_, crate::core::storage::Storage>) -> Result<ScanNowResponse, String> {
     let start_time = SystemTime::now();
     let started_at: DateTime<Utc> = start_time.into();
     
+    app.emit("scan-progress", "Construyendo mapa de procesos del sistema...").unwrap_or(());
     // 1. Gather OS processes mapping
     let process_map = SystemProcessMap::build()
         .map_err(|e| e.to_string())?;
 
+    app.emit("scan-progress", "Recolectando conexiones activas (netstat)...").unwrap_or(());
     // 2. Collect raw observations (active outbound connections)
     let raw_observations = Collector::collect_active_connections()
         .map_err(|e| e.to_string())?;
@@ -34,6 +36,9 @@ pub async fn scan_now(state: tauri::State<'_, crate::core::storage::Storage>) ->
     summary.total_observations = raw_observations.len() as u32;
 
     for (index, obs) in raw_observations.into_iter().enumerate() {
+        if index % 3 == 0 {
+            app.emit("scan-progress", format!("Analizando conexión {}/{}...", index + 1, summary.total_observations)).unwrap_or(());
+        }
         let finding_id = format!("FND-{}-{}", started_at.timestamp(), index);
         
         let local = LocalEndpoint {
@@ -137,6 +142,7 @@ pub async fn scan_now(state: tauri::State<'_, crate::core::storage::Storage>) ->
         findings,
     };
     
+    app.emit("scan-progress", "Guardando resultados...").unwrap_or(());
     // Export to JSON outside src-tauri to prevent hot-reload loop
     let _ = Exporter::export_to_json(&response, "../last_scan.json");
     

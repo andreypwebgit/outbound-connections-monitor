@@ -1,4 +1,5 @@
 const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
 
 // Store global findings state for filtering
 let currentFindings = [];
@@ -9,13 +10,26 @@ let activeFilters = {
   unknown: true
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const scanBtn = document.getElementById('scan-btn');
   const appContent = document.getElementById('app-content');
 
+  // Setup progress listener
+  await listen('scan-progress', (event) => {
+    const progressText = document.getElementById('scan-progress-text');
+    if (progressText) {
+      progressText.innerText = event.payload;
+    }
+  });
+
   if (scanBtn) {
     scanBtn.addEventListener('click', async () => {
-      appContent.innerHTML = '<div class="text-center py-12 text-blue-400"><p>Escaneando conexiones (esto puede tardar unos segundos)...</p></div>';
+      appContent.innerHTML = `
+        <div class="bg-gray-800 border border-gray-700 rounded-lg p-8 shadow-sm flex flex-col items-center justify-center min-h-[200px]">
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
+          <p class="text-blue-400 font-semibold mb-2">Analizando actividad de red...</p>
+          <p id="scan-progress-text" class="text-xs text-gray-500 font-mono">Iniciando escáner...</p>
+        </div>`;
       
       try {
         const result = await invoke('scan_now');
@@ -30,9 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function getBandCategory(band) {
   const b = band.toLowerCase();
-  if (b.includes('safe') || b === 'known_safe') return 'safe';
-  if (b.includes('danger') || b === 'investigate') return 'danger';
-  if (b.includes('review') || b === 'revalidate' || b === 'observe') return 'review';
+  if (b === 'known_safe') return 'safe';
+  if (b === 'potentially_dangerous') return 'danger';
+  if (b === 'known_low' || b === 'known_moderate' || b === 'known_high') return 'review';
   return 'unknown';
 }
 
@@ -73,14 +87,23 @@ function renderDashboard(result) {
     return;
   }
 
+  let safeCount = 0, reviewCount = 0, dangerCount = 0, otherCount = 0;
+  result.findings.forEach(f => {
+    const cat = getBandCategory(f.risk.band);
+    if (cat === 'safe') safeCount++;
+    else if (cat === 'review') reviewCount++;
+    else if (cat === 'danger') dangerCount++;
+    else otherCount++;
+  });
+
   let html = `<div class="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6 shadow-sm">
     <h2 class="text-lg font-semibold mb-2">Resumen</h2>
     <div class="grid grid-cols-5 gap-4 text-sm">
-      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Total</span><span class="text-xl font-mono">${result.summary.total_observations}</span></div>
-      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Safe</span><span class="text-xl font-mono text-green-400">${result.summary.accepted_count}</span></div>
-      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Review</span><span class="text-xl font-mono text-yellow-400">${result.summary.review_count}</span></div>
-      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Danger</span><span class="text-xl font-mono text-red-400">${result.summary.danger_count}</span></div>
-      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Other</span><span class="text-xl font-mono text-gray-400">${result.summary.unknown_count}</span></div>
+      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Total</span><span class="text-xl font-mono">${result.findings.length}</span></div>
+      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Safe</span><span class="text-xl font-mono text-green-400">${safeCount}</span></div>
+      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Review</span><span class="text-xl font-mono text-yellow-400">${reviewCount}</span></div>
+      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Danger</span><span class="text-xl font-mono text-red-400">${dangerCount}</span></div>
+      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Other</span><span class="text-xl font-mono text-gray-400">${otherCount}</span></div>
     </div>
   </div>`;
   
@@ -144,7 +167,8 @@ function renderFindingsList() {
         'SUSPICIOUS_COMMAND_LINE': 'Línea de comandos sospechosa u ofuscada',
         'OFFICE_SPAWNED_NETWORK_PROCESS': 'Proceso ofimático generó proceso de red',
         'SCRIPT_SPAWNED_NETWORK_PROCESS': 'Script generó proceso de red',
-        'USER_PROCESS_AS_SYSTEM': 'Proceso típicamente de usuario ejecutado como SYSTEM'
+        'USER_PROCESS_AS_SYSTEM': 'Proceso típicamente de usuario ejecutado como SYSTEM',
+        'PROTECTED_SYSTEM_PROCESS': 'Proceso protegido del sistema (PPL/Kernel)'
       };
       return map[code] || code;
     });

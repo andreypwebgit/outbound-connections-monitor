@@ -15,8 +15,15 @@ impl RiskEngine {
         
         // 1. Process Checks
         if process.file_missing {
-            score += 50;
-            reason_codes.push("FILE_MISSING".to_string());
+            let p_lower = process.name.to_lowercase();
+            if p_lower == "system" || p_lower == "registry" || p_lower == "memory compression" || 
+               p_lower == "msmpeng.exe" || p_lower == "csrss.exe" || p_lower == "smss.exe" || p_lower == "services.exe" {
+                reason_codes.push("PROTECTED_SYSTEM_PROCESS".to_string());
+                // No penalizamos 50 puntos porque es normal no tener acceso a estos procesos protegidos
+            } else {
+                score += 50;
+                reason_codes.push("FILE_MISSING".to_string());
+            }
         }
         
         if process.orphaned {
