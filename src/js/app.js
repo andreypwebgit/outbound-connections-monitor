@@ -75,10 +75,12 @@ function renderDashboard(result) {
 
   let html = `<div class="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6 shadow-sm">
     <h2 class="text-lg font-semibold mb-2">Resumen</h2>
-    <div class="grid grid-cols-4 gap-4 text-sm">
+    <div class="grid grid-cols-5 gap-4 text-sm">
       <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Total</span><span class="text-xl font-mono">${result.summary.total_observations}</span></div>
+      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Safe</span><span class="text-xl font-mono text-green-400">${result.summary.accepted_count}</span></div>
       <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Review</span><span class="text-xl font-mono text-yellow-400">${result.summary.review_count}</span></div>
       <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Danger</span><span class="text-xl font-mono text-red-400">${result.summary.danger_count}</span></div>
+      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Other</span><span class="text-xl font-mono text-gray-400">${result.summary.unknown_count}</span></div>
     </div>
   </div>`;
   
@@ -138,7 +140,11 @@ function renderFindingsList() {
         'INVALID_SIGNATURE': 'Firma digital inválida (Authenticode error)',
         'FILE_MISSING': 'Archivo borrado o inaccesible en disco',
         'VALID_MICROSOFT_SIGNATURE': 'Firmado digitalmente por Microsoft',
-        'ESTABLISHED_BASELINE': 'Comportamiento habitual (Baseline sólido)'
+        'ESTABLISHED_BASELINE': 'Comportamiento habitual (Baseline sólido)',
+        'SUSPICIOUS_COMMAND_LINE': 'Línea de comandos sospechosa u ofuscada',
+        'OFFICE_SPAWNED_NETWORK_PROCESS': 'Proceso ofimático generó proceso de red',
+        'SCRIPT_SPAWNED_NETWORK_PROCESS': 'Script generó proceso de red',
+        'USER_PROCESS_AS_SYSTEM': 'Proceso típicamente de usuario ejecutado como SYSTEM'
       };
       return map[code] || code;
     });
@@ -177,6 +183,11 @@ function renderFindingsList() {
               <span class="${finding.trust.signature_status.includes('Valid') ? 'text-green-400' : 'text-yellow-400'}">${finding.trust.signature_status}</span>
               ${finding.trust.signer_subject ? `<br><span class="text-xs ml-2 text-gray-400">Firmante: ${finding.trust.signer_subject}</span>` : ''}
             </p>
+            <div class="mt-3 border-t border-gray-700 pt-2">
+              <p class="mb-1 text-gray-300"><span class="text-gray-500 mr-2">Usuario:</span>${finding.process.user || 'Desconocido'}</p>
+              <p class="mb-1 text-gray-300"><span class="text-gray-500 mr-2">Proceso Padre:</span>${finding.process.parent_name || 'Desconocido'} ${finding.process.ppid ? `(PID: ${finding.process.ppid})` : ''}</p>
+              <p class="mb-1 text-gray-300 break-all"><span class="text-gray-500 mr-2">CmdLine:</span><span class="font-mono text-xs">${finding.process.command_line || 'No disponible'}</span></p>
+            </div>
           </div>
           <div>
             <h4 class="text-gray-500 text-xs uppercase mb-2">Motor de Riesgo (Score: ${finding.risk.score})</h4>
