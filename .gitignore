@@ -1,4 +1,13 @@
+# Dependencias
 node_modules/
+
+# Sistema
 .DS_Store
+
+# Datos runtime de la app en desarrollo (viven en la raíz del repo)
 last_scan.json
 ocm_baseline.db
+ocm_baseline.db-journal
+ocm_baseline.db-wal
+ocm_baseline.db-shm
+exports/
