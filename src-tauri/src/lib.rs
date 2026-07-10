@@ -46,7 +46,8 @@ pub fn run() {
             commands::history::get_scan_history,
             commands::history::get_scan,
             commands::export_scan::export_scan,
-            commands::manual_decision::record_manual_decision
+            commands::manual_decision::record_manual_decision,
+            commands::open_external::open_external
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

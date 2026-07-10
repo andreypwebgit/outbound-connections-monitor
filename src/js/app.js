@@ -24,6 +24,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   scanBtn?.addEventListener('click', () => runScan(appContent));
   historyBtn?.addEventListener('click', () => showHistory(appContent));
 
+  // Enlaces externos (footer): target="_blank" no abre el navegador por
+  // defecto dentro de la webview, así que se delega al backend.
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('a[target="_blank"]');
+    if (!link) return;
+    event.preventDefault();
+    api.openExternal(link.href).catch((error) => console.error('openExternal:', error));
+  });
+
   // Delegación de eventos para todo el contenido dinámico.
   appContent.addEventListener('click', (event) => {
     const target = event.target.closest('[data-action]');

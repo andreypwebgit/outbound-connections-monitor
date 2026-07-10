@@ -1,5 +1,11 @@
 # Outbound Connections Monitor (OCM)
 
+[![Web Oficial](https://img.shields.io/badge/🌐_Web_Oficial-ocm.apwebai.es-2563eb?style=for-the-badge)](https://ocm.apwebai.es/)
+[![Licencia](https://img.shields.io/badge/Licencia-MIT-green?style=for-the-badge)](LICENSE)
+[![Descargas](https://img.shields.io/badge/Descargas-v0.4.0-orange?style=for-the-badge)](https://github.com/andreypwebgit/outbound-connections-monitor/releases/latest)
+
+**Web oficial: [https://ocm.apwebai.es/](https://ocm.apwebai.es/)** — información del proyecto, guía de uso y descargas.
+
 Visibilidad humana y contexto técnico avanzado sobre conexiones salientes para sistemas Windows, diseñado para analistas de ciberseguridad y *Threat Hunters*.
 
 > **ℹ️ Nota sobre Windows SmartScreen:** los instaladores de OCM todavía no están firmados digitalmente con un certificado de código. Por eso, la primera vez que ejecutes el instalador (o la app), Windows mostrará el aviso *"Windows protegió tu PC"*. Es el comportamiento normal de SmartScreen con software nuevo sin firma, no una detección de amenaza. Para continuar: haz clic en **"Más información"** y después en **"Ejecutar de todas formas"**. Si prefieres no hacerlo, siempre puedes compilar la app desde este código fuente (ver más abajo).
@@ -88,6 +94,14 @@ Aunque OCM ya ofrece capacidades tácticas potentes, estas son algunas rutas par
 
 ### 5. Automatización del Build en CI
 *   Los instaladores `.msi` / `.exe` ya se generan localmente con `npx tauri build` (ver [docs/build-and-distribution.md](docs/build-and-distribution.md)). El siguiente paso es automatizarlo con GitHub Actions y añadir firma de código para eliminar el aviso de SmartScreen.
+
+---
+
+## 💡 Sobre el Autor & APWebAI
+
+OCM ha sido desarrollado como contribución **Open Source** por **Andrey Pérez**. En [APWebAI](https://apwebai.es/) nos dedicamos a la **ingeniería web purista**: rendimiento, semántica y arquitecturas sin sobrecarga tecnológica.
+
+¿Te preocupa cómo los agentes de IA (ChatGPT, Claude, Perplexity) están leyendo tu web corporativa? Descubre nuestro estándar **Agentic Resource Discovery (ARD)** y audita tu dominio gratis en: **[https://ard.apwebai.es](https://ard.apwebai.es)**
 
 ---
 

@@ -36,3 +36,12 @@ export function recordManualDecision(sha256, decisionType, notes = null) {
 export function onScanProgress(callback) {
   return listen('scan-progress', (event) => callback(event.payload));
 }
+
+/**
+ * Abre una URL http(s) en el navegador por defecto del sistema.
+ * En la webview de Tauri, target="_blank" no llega al navegador del
+ * usuario: los enlaces externos se delegan a este comando.
+ */
+export function openExternal(url) {
+  return invoke('open_external', { url });
+}
