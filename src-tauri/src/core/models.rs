@@ -152,8 +152,22 @@ pub struct RiskInfo {
     pub recommended_action: String,
 }
 
+/// Entrada ligera del historial de escaneos para la UI.
+/// Se construye desde `scans` + el summary persistido, sin cargar findings.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ScanHistoryEntry {
+    pub scan_id: String,
+    pub started_at: String,
+    pub finished_at: String,
+    pub duration_ms: u64,
+    pub total_observations: u32,
+    pub accepted_count: u32,
+    pub review_count: u32,
+    pub danger_count: u32,
+}
+
 // Internal Enums for Domain Logic
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BaselineState {
     Unknown,
     Candidate,
@@ -174,6 +188,91 @@ impl BaselineState {
             BaselineState::BaselineConsolidated => "Baseline_Consolidated",
             BaselineState::RevalidationRequired => "Revalidation_Required",
             BaselineState::PotentiallyDangerous => "Potentially_Dangerous",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "Unknown" => Some(BaselineState::Unknown),
+            "Candidate" => Some(BaselineState::Candidate),
+            "Observed_Local" => Some(BaselineState::ObservedLocal),
+            "Baseline_Provisional" => Some(BaselineState::BaselineProvisional),
+            "Baseline_Consolidated" => Some(BaselineState::BaselineConsolidated),
+            "Revalidation_Required" => Some(BaselineState::RevalidationRequired),
+            "Potentially_Dangerous" => Some(BaselineState::PotentiallyDangerous),
+            _ => None,
+        }
+    }
+
+    /// Transiciones automáticas permitidas por `docs/baseline-lifecycle.md`.
+    ///
+    /// Nota de interpretación (documentada en docs/implementation-notes.md):
+    /// la Regla 4 del lifecycle obliga a empujar a `Revalidation_Required`
+    /// cualquier "elemento conocido" cuyo hash cambie, por lo que además de
+    /// `Baseline_Consolidated -> Revalidation_Required` se aceptan
+    /// `Observed_Local -> Revalidation_Required` y
+    /// `Baseline_Provisional -> Revalidation_Required`.
+    pub fn is_valid_automatic_transition(&self, next: BaselineState) -> bool {
+        if next == BaselineState::PotentiallyDangerous {
+            // "Any -> Potentially_Dangerous"
+            return true;
+        }
+        matches!(
+            (self, next),
+            (BaselineState::Unknown, BaselineState::Candidate)
+                | (BaselineState::Candidate, BaselineState::BaselineProvisional)
+                | (BaselineState::BaselineProvisional, BaselineState::BaselineConsolidated)
+                | (BaselineState::ObservedLocal, BaselineState::RevalidationRequired)
+                | (BaselineState::BaselineProvisional, BaselineState::RevalidationRequired)
+                | (BaselineState::BaselineConsolidated, BaselineState::RevalidationRequired)
+        )
+    }
+
+    /// Transiciones que requieren decisión manual explícita del usuario.
+    ///
+    /// - `Candidate -> Observed_Local` está en el lifecycle como transición
+    ///   de validación manual.
+    /// - Las salidas de `Revalidation_Required` y `Potentially_Dangerous`
+    ///   hacia `Candidate` no están enumeradas en el lifecycle; se aceptan
+    ///   solo como decisión manual para que un falso positivo pueda
+    ///   re-aprenderse (ver docs/implementation-notes.md).
+    pub fn is_valid_manual_transition(&self, next: BaselineState) -> bool {
+        matches!(
+            (self, next),
+            (BaselineState::Candidate, BaselineState::ObservedLocal)
+                | (BaselineState::RevalidationRequired, BaselineState::Candidate)
+                | (BaselineState::PotentiallyDangerous, BaselineState::Candidate)
+        )
+    }
+}
+
+/// Niveles de afinidad válidos según `docs/affinity-model.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AffinityLevel {
+    High,
+    Medium,
+    Low,
+    None,
+}
+
+impl AffinityLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AffinityLevel::High => "high",
+            AffinityLevel::Medium => "medium",
+            AffinityLevel::Low => "low",
+            AffinityLevel::None => "none",
+        }
+    }
+
+    /// Mapeo score -> nivel siguiendo las bandas orientativas del modelo:
+    /// 90-100 fuerte, 70-89 razonable, 40-69 débil, 0-39 desajuste.
+    pub fn from_score(score: u8) -> Self {
+        match score {
+            90..=100 => AffinityLevel::High,
+            70..=89 => AffinityLevel::Medium,
+            40..=69 => AffinityLevel::Low,
+            _ => AffinityLevel::None,
         }
     }
 }

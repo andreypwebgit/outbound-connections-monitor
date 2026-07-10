@@ -1,8 +1,10 @@
 pub mod models;
 pub mod errors;
+pub mod paths;
 pub mod storage;
 pub mod collector;
 pub mod enricher;
+pub mod affinity;
 pub mod risk_engine;
 pub mod baseline_manager;
 pub mod identity_cache;

@@ -85,6 +85,19 @@ Validar:
 - respuestas mock de VirusTotal/AbuseIPDB;
 - ejemplos de binarios firmados, unsigned y revalidados.
 
+## Ubicación de los tests
+
+- Unitarios por módulo: `#[cfg(test)]` al final de cada archivo de
+  `src-tauri/src/core/` (enricher, identity_cache, baseline_manager,
+  affinity, risk_engine, exporter).
+- Integración: `src-tauri/tests/contract_test.rs` (valida respuestas contra
+  `docs/scan-now-contract.json` con un mini-validador de JSON Schema, sin
+  dependencias) y `src-tauri/tests/storage_test.rs` (SQLite end-to-end).
+- Ejecución: `cargo test` dentro de `src-tauri/`.
+
+Los mocks de VirusTotal/AbuseIPDB quedan pendientes de que exista el bloque
+de Intel externo (opcional, no implementado en el motor local).
+
 ## Regla de aceptación
 
 Una tarea no se considera terminada si toca contrato, scoring, baseline, afinidad, caché o persistencia y no deja tests o actualizaciones de tests relacionados.

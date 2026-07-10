@@ -1,233 +1,222 @@
-const { invoke } = window.__TAURI__.core;
-const { listen } = window.__TAURI__.event;
+// Orquestador de la UI: wiring de eventos y coordinación entre api, state y render.
 
-// Store global findings state for filtering
-let currentFindings = [];
-let activeFilters = {
-  safe: true,
-  review: true,
-  danger: true,
-  unknown: true
-};
+import * as api from './api.js';
+import { state, setScan, toggleFilter, applyBaselineToFindings } from './state.js';
+import { renderSummary } from './render/summary.js';
+import { renderFindingsSection, renderFindingsList } from './render/findings.js';
+import { escapeHtml, formatDate } from './render/html.js';
+
+/** Último scan lanzado en vivo, para poder volver desde la vista histórica. */
+let lastLiveScan = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   const scanBtn = document.getElementById('scan-btn');
+  const historyBtn = document.getElementById('history-btn');
   const appContent = document.getElementById('app-content');
 
-  // Setup progress listener
-  await listen('scan-progress', (event) => {
+  await api.onScanProgress((message) => {
     const progressText = document.getElementById('scan-progress-text');
     if (progressText) {
-      progressText.innerText = event.payload;
+      progressText.textContent = message;
     }
   });
 
-  if (scanBtn) {
-    scanBtn.addEventListener('click', async () => {
-      appContent.innerHTML = `
-        <div class="bg-gray-800 border border-gray-700 rounded-lg p-8 shadow-sm flex flex-col items-center justify-center min-h-[200px]">
-          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
-          <p class="text-blue-400 font-semibold mb-2">Analizando actividad de red...</p>
-          <p id="scan-progress-text" class="text-xs text-gray-500 font-mono">Iniciando escáner...</p>
-        </div>`;
-      
-      try {
-        const result = await invoke('scan_now');
-        currentFindings = result.findings;
-        renderDashboard(result);
-      } catch (error) {
-        appContent.innerHTML = `<div class="text-center py-12 text-red-500"><p>Error durante el escaneo: ${error}</p></div>`;
+  scanBtn?.addEventListener('click', () => runScan(appContent));
+  historyBtn?.addEventListener('click', () => showHistory(appContent));
+
+  // Delegación de eventos para todo el contenido dinámico.
+  appContent.addEventListener('click', (event) => {
+    const target = event.target.closest('[data-action]');
+    if (!target) return;
+
+    switch (target.dataset.action) {
+      case 'toggle-row': {
+        const detail = document.getElementById(`detail-${target.dataset.row}`);
+        detail?.classList.toggle('hidden');
+        break;
       }
-    });
-  }
+      case 'toggle-filter': {
+        toggleFilter(target.dataset.category);
+        refreshFindingsSection();
+        break;
+      }
+      case 'export': {
+        handleExport(target.dataset.format);
+        break;
+      }
+      case 'manual-decision': {
+        handleManualDecision(target.dataset.sha, target.dataset.decision, target);
+        break;
+      }
+      case 'load-scan': {
+        loadHistoricalScan(appContent, target.dataset.scanId);
+        break;
+      }
+      case 'back-live': {
+        if (lastLiveScan) {
+          setScan(lastLiveScan, { historical: false });
+          renderDashboard(appContent);
+        } else {
+          renderWelcome(appContent);
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  });
 });
 
-function getBandCategory(band) {
-  const b = band.toLowerCase();
-  if (b === 'known_safe') return 'safe';
-  if (b === 'potentially_dangerous') return 'danger';
-  if (b === 'known_low' || b === 'known_moderate' || b === 'known_high') return 'review';
-  return 'unknown';
+// ----------------------------------------------------------------------
+// Vistas
+// ----------------------------------------------------------------------
+
+function renderWelcome(appContent) {
+  appContent.innerHTML = `
+    <div id="welcome-message" class="text-center py-12 text-gray-500">
+      <p>Haz clic en "Scan Now" para analizar las conexiones salientes activas.</p>
+    </div>`;
 }
 
-function toggleFilter(category) {
-  activeFilters[category] = !activeFilters[category];
-  
-  // Update button UI
-  const btn = document.getElementById(`filter-btn-${category}`);
-  if (btn) {
-    if (activeFilters[category]) {
-      btn.classList.remove('opacity-50', 'bg-transparent', 'border-gray-600');
-      btn.classList.add(`bg-${getCategoryColor(category)}-900`, `border-${getCategoryColor(category)}-500`, `text-${getCategoryColor(category)}-300`);
-    } else {
-      btn.classList.add('opacity-50', 'bg-transparent', 'border-gray-600');
-      btn.classList.remove(`bg-${getCategoryColor(category)}-900`, `border-${getCategoryColor(category)}-500`, `text-${getCategoryColor(category)}-300`);
-    }
-  }
-  
-  renderFindingsList();
-}
+async function runScan(appContent) {
+  appContent.innerHTML = `
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-8 shadow-sm flex flex-col items-center justify-center min-h-[200px]">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
+      <p class="text-blue-400 font-semibold mb-2">Analizando actividad de red...</p>
+      <p id="scan-progress-text" class="text-xs text-gray-500 font-mono">Iniciando escáner...</p>
+    </div>`;
 
-// Make toggleFilter global for inline onclick
-window.toggleFilter = toggleFilter;
-
-function getCategoryColor(cat) {
-  switch(cat) {
-    case 'safe': return 'green';
-    case 'danger': return 'red';
-    case 'review': return 'yellow';
-    default: return 'gray';
+  try {
+    const result = await api.scanNow();
+    lastLiveScan = result;
+    setScan(result, { historical: false });
+    renderDashboard(appContent);
+  } catch (error) {
+    appContent.innerHTML = `<div class="text-center py-12 text-red-500"><p>Error durante el escaneo: ${escapeHtml(error)}</p></div>`;
   }
 }
 
-function renderDashboard(result) {
-  const appContent = document.getElementById('app-content');
-  if (!result || !result.findings) {
-    appContent.innerHTML = '<div class="text-center py-12 text-yellow-500"><p>Escaneo completado, pero no se devolvió formato esperado.</p></div>';
+function renderDashboard(appContent) {
+  const scan = state.currentScan;
+  if (!scan || !Array.isArray(scan.findings)) {
+    appContent.innerHTML =
+      '<div class="text-center py-12 text-yellow-500"><p>Escaneo completado, pero no se devolvió el formato esperado.</p></div>';
     return;
   }
 
-  let safeCount = 0, reviewCount = 0, dangerCount = 0, otherCount = 0;
-  result.findings.forEach(f => {
-    const cat = getBandCategory(f.risk.band);
-    if (cat === 'safe') safeCount++;
-    else if (cat === 'review') reviewCount++;
-    else if (cat === 'danger') dangerCount++;
-    else otherCount++;
-  });
-
-  let html = `<div class="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6 shadow-sm">
-    <h2 class="text-lg font-semibold mb-2">Resumen</h2>
-    <div class="grid grid-cols-5 gap-4 text-sm">
-      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Total</span><span class="text-xl font-mono">${result.findings.length}</span></div>
-      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Safe</span><span class="text-xl font-mono text-green-400">${safeCount}</span></div>
-      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Review</span><span class="text-xl font-mono text-yellow-400">${reviewCount}</span></div>
-      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Danger</span><span class="text-xl font-mono text-red-400">${dangerCount}</span></div>
-      <div class="bg-gray-700 p-3 rounded"><span class="block text-gray-400 text-xs uppercase tracking-wider">Other</span><span class="text-xl font-mono text-gray-400">${otherCount}</span></div>
-    </div>
-  </div>`;
-  
-  html += `
-    <div class="flex justify-between items-center mb-3">
-      <h3 class="text-lg font-semibold">Hallazgos</h3>
-      <div class="flex gap-2 text-xs font-mono">
-        <button id="filter-btn-safe" onclick="toggleFilter('safe')" class="px-3 py-1 rounded border border-green-500 bg-green-900 text-green-300 transition-colors">SAFE</button>
-        <button id="filter-btn-review" onclick="toggleFilter('review')" class="px-3 py-1 rounded border border-yellow-500 bg-yellow-900 text-yellow-300 transition-colors">REVIEW</button>
-        <button id="filter-btn-danger" onclick="toggleFilter('danger')" class="px-3 py-1 rounded border border-red-500 bg-red-900 text-red-300 transition-colors">DANGER</button>
-        <button id="filter-btn-unknown" onclick="toggleFilter('unknown')" class="px-3 py-1 rounded border border-gray-500 bg-gray-800 text-gray-300 transition-colors">OTHER</button>
-      </div>
-    </div>
-    <div id="findings-container" class="space-y-3"></div>
-  `;
-  
-  appContent.innerHTML = html;
-  
-  // Make sure toggle toggleRow is available globally
-  window.toggleRow = function(id) {
-    const el = document.getElementById(`detail-${id}`);
-    if (el) {
-      el.classList.toggle('hidden');
-    }
-  };
-
+  appContent.innerHTML = `
+    ${renderSummary(scan, state.isHistorical)}
+    <div id="findings-section">${renderFindingsSection()}</div>`;
   renderFindingsList();
 }
 
-function renderFindingsList() {
-  const container = document.getElementById('findings-container');
-  if (!container) return;
-  
-  let html = '';
-  let visibleCount = 0;
-  
-  for (let i = 0; i < currentFindings.length; i++) {
-    const finding = currentFindings[i];
-    const category = getBandCategory(finding.risk.band);
-    
-    if (!activeFilters[category]) {
-      continue;
-    }
-    
-    visibleCount++;
-    const rowId = `row-${i}`;
-    const riskColor = category === 'safe' ? 'text-green-400' : (category === 'danger' ? 'text-red-400' : (category === 'review' ? 'text-yellow-400' : 'text-gray-400'));
-    
-    // Humanizar códigos de razón
-    const humanReasons = finding.risk.reason_codes.map(code => {
-      const map = {
-        'UNSIGNED_SYSTEM_PROCESS': 'Proceso de sistema sin firma válida',
-        'SYSTEM_PATH_BUT_NOT_MICROSOFT': 'En ruta de Windows pero no firmado por Microsoft',
-        'EXECUTING_FROM_TEMP_OR_DOWNLOADS': 'Ejecutándose desde Temp o Descargas',
-        'NEW_DESTINATION': 'Destino IP nunca visto',
-        'UNKNOWN_BASELINE': 'Comportamiento no conocido (Baseline)',
-        'INVALID_SIGNATURE': 'Firma digital inválida (Authenticode error)',
-        'FILE_MISSING': 'Archivo borrado o inaccesible en disco',
-        'VALID_MICROSOFT_SIGNATURE': 'Firmado digitalmente por Microsoft',
-        'ESTABLISHED_BASELINE': 'Comportamiento habitual (Baseline sólido)',
-        'SUSPICIOUS_COMMAND_LINE': 'Línea de comandos sospechosa u ofuscada',
-        'OFFICE_SPAWNED_NETWORK_PROCESS': 'Proceso ofimático generó proceso de red',
-        'SCRIPT_SPAWNED_NETWORK_PROCESS': 'Script generó proceso de red',
-        'USER_PROCESS_AS_SYSTEM': 'Proceso típicamente de usuario ejecutado como SYSTEM',
-        'PROTECTED_SYSTEM_PROCESS': 'Proceso protegido del sistema (PPL/Kernel)'
-      };
-      return map[code] || code;
-    });
+function refreshFindingsSection() {
+  const section = document.getElementById('findings-section');
+  if (!section) return;
+  section.innerHTML = renderFindingsSection();
+  renderFindingsList();
+}
 
-    const servicesBadge = finding.process.services && finding.process.services.length > 0
-      ? `<span class="ml-2 px-1.5 py-0.5 bg-blue-900 text-blue-200 text-[10px] rounded border border-blue-700">${finding.process.services.join(', ')}</span>`
-      : '';
+async function showHistory(appContent) {
+  appContent.innerHTML = '<div class="text-center py-12 text-gray-500"><p>Cargando historial...</p></div>';
 
-    html += `
-      <div class="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden shadow-sm">
-        <div class="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-750 transition-colors" onclick="toggleRow('${rowId}')">
-          <div>
-            <div class="font-mono text-sm mb-1 flex items-center">
-              <span class="font-bold">${finding.process.name}</span> 
-              <span class="text-gray-500 ml-2">PID: ${finding.process.pid}</span>
-              ${servicesBadge}
-            </div>
-            <div class="text-xs text-gray-400">${finding.protocol} ${finding.local.ip}:${finding.local.port} &rarr; ${finding.remote.ip}:${finding.remote.port} ${finding.remote.hostname ? `(${finding.remote.hostname})` : ''}</div>
-          </div>
-          <div class="text-right">
-            <div class="text-xs uppercase tracking-wider mb-1 font-bold ${riskColor}">${finding.risk.band}</div>
-            <div class="text-xs text-gray-500 flex items-center justify-end gap-1">
-              ${finding.baseline.state}
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-1 opacity-50"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Detalle Desplegable -->
-        <div id="detail-${rowId}" class="hidden bg-gray-900 p-4 border-t border-gray-700 text-sm grid grid-cols-2 gap-4">
-          <div>
-            <h4 class="text-gray-500 text-xs uppercase mb-2">Detalles del Proceso</h4>
-            <p class="mb-1 text-gray-300 break-all"><span class="text-gray-500 mr-2">Ruta:</span>${finding.process.path || 'No disponible'}</p>
-            <p class="mb-1 text-gray-300 break-all"><span class="text-gray-500 mr-2">SHA-256:</span><span class="font-mono text-xs">${finding.binary_identity.sha256 || 'N/A'}</span></p>
-            <p class="mb-1 text-gray-300"><span class="text-gray-500 mr-2">Authenticode:</span>
-              <span class="${finding.trust.signature_status.includes('Valid') ? 'text-green-400' : 'text-yellow-400'}">${finding.trust.signature_status}</span>
-              ${finding.trust.signer_subject ? `<br><span class="text-xs ml-2 text-gray-400">Firmante: ${finding.trust.signer_subject}</span>` : ''}
-            </p>
-            <div class="mt-3 border-t border-gray-700 pt-2">
-              <p class="mb-1 text-gray-300"><span class="text-gray-500 mr-2">Usuario:</span>${finding.process.user || 'Desconocido'}</p>
-              <p class="mb-1 text-gray-300"><span class="text-gray-500 mr-2">Proceso Padre:</span>${finding.process.parent_name || 'Desconocido'} ${finding.process.ppid ? `(PID: ${finding.process.ppid})` : ''}</p>
-              <p class="mb-1 text-gray-300 break-all"><span class="text-gray-500 mr-2">CmdLine:</span><span class="font-mono text-xs">${finding.process.command_line || 'No disponible'}</span></p>
-            </div>
-          </div>
-          <div>
-            <h4 class="text-gray-500 text-xs uppercase mb-2">Motor de Riesgo (Score: ${finding.risk.score})</h4>
-            <ul class="list-disc pl-4 space-y-1 text-gray-300">
-              ${humanReasons.map(r => `<li>${r}</li>`).join('') || '<li class="text-gray-500">Sin razones específicas</li>'}
-            </ul>
-            <p class="mt-3 text-xs text-gray-400">Baseline visto por primera vez: ${finding.baseline.first_seen ? new Date(finding.baseline.first_seen).toLocaleString() : 'Hoy'}</p>
-          </div>
-        </div>
+  try {
+    state.history = await api.getScanHistory();
+  } catch (error) {
+    appContent.innerHTML = `<div class="text-center py-12 text-red-500"><p>Error cargando historial: ${escapeHtml(error)}</p></div>`;
+    return;
+  }
+
+  if (state.history.length === 0) {
+    appContent.innerHTML =
+      '<div class="text-center py-12 text-gray-500"><p>Todavía no hay escaneos persistidos. Lanza tu primer "Scan Now".</p></div>';
+    return;
+  }
+
+  const rows = state.history
+    .map(
+      (entry) => `
+      <tr class="border-t border-gray-700 hover:bg-gray-700">
+        <td class="px-3 py-2 font-mono text-xs">${escapeHtml(entry.scan_id)}</td>
+        <td class="px-3 py-2 text-gray-300">${formatDate(entry.started_at)}</td>
+        <td class="px-3 py-2 text-gray-400 text-right">${entry.duration_ms} ms</td>
+        <td class="px-3 py-2 text-right">${entry.total_observations}</td>
+        <td class="px-3 py-2 text-right text-green-400">${entry.accepted_count}</td>
+        <td class="px-3 py-2 text-right text-yellow-400">${entry.review_count}</td>
+        <td class="px-3 py-2 text-right ${entry.danger_count > 0 ? 'text-red-400 font-bold' : 'text-gray-500'}">${entry.danger_count}</td>
+        <td class="px-3 py-2 text-right">
+          <button data-action="load-scan" data-scan-id="${escapeHtml(entry.scan_id)}"
+                  class="px-2 py-1 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors text-xs">Ver</button>
+        </td>
+      </tr>`
+    )
+    .join('');
+
+  appContent.innerHTML = `
+    <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-sm">
+      <h2 class="text-lg font-semibold mb-4">Historial de escaneos</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-xs text-gray-500 uppercase tracking-wider">
+              <th class="px-3 py-2 text-left">Scan</th>
+              <th class="px-3 py-2 text-left">Fecha</th>
+              <th class="px-3 py-2 text-right">Duración</th>
+              <th class="px-3 py-2 text-right">Total</th>
+              <th class="px-3 py-2 text-right">Aceptadas</th>
+              <th class="px-3 py-2 text-right">Revisión</th>
+              <th class="px-3 py-2 text-right">Peligro</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>
-    `;
+    </div>`;
+}
+
+async function loadHistoricalScan(appContent, scanId) {
+  appContent.innerHTML = '<div class="text-center py-12 text-gray-500"><p>Cargando escaneo...</p></div>';
+  try {
+    const scan = await api.getScan(scanId);
+    setScan(scan, { historical: true });
+    renderDashboard(appContent);
+  } catch (error) {
+    appContent.innerHTML = `<div class="text-center py-12 text-red-500"><p>Error cargando el escaneo: ${escapeHtml(error)}</p></div>`;
   }
-  
-  if (visibleCount === 0) {
-    html = `<div class="text-center py-8 text-gray-500 border border-dashed border-gray-700 rounded-lg">No hay hallazgos que coincidan con los filtros actuales.</div>`;
+}
+
+// ----------------------------------------------------------------------
+// Acciones
+// ----------------------------------------------------------------------
+
+async function handleExport(format) {
+  const output = document.getElementById('export-result');
+  if (!state.currentScan) return;
+  if (output) output.textContent = 'Exportando...';
+
+  try {
+    const path = await api.exportScan(state.currentScan.scan_id, format);
+    if (output) output.textContent = `Exportado a: ${path}`;
+  } catch (error) {
+    if (output) output.textContent = `Error al exportar: ${error}`;
   }
-  
-  container.innerHTML = html;
+}
+
+async function handleManualDecision(sha256, decisionType, button) {
+  button.disabled = true;
+  button.textContent = 'Aplicando...';
+
+  try {
+    const baseline = await api.recordManualDecision(sha256, decisionType);
+    // El baseline es global: se refleja en todos los findings del binario.
+    // El riesgo mostrado NO se recalcula: es el snapshot del scan; el nuevo
+    // estado aplicará en el próximo escaneo.
+    applyBaselineToFindings(sha256, baseline);
+    renderFindingsList();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = 'Error — reintentar';
+    button.title = String(error);
+  }
 }

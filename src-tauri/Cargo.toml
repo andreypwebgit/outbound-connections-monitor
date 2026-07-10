@@ -1,8 +1,8 @@
 [package]
 name = "app"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+version = "0.4.0"
+description = "Outbound Connections Monitor: escaneo manual de conexiones salientes con baseline, afinidad y riesgo explicable"
+authors = ["APWebAI"]
 license = ""
 repository = ""
 edition = "2021"

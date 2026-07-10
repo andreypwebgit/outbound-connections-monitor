@@ -15,18 +15,25 @@ Persistir scans, findings, identidad de binarios, baseline, decisiones y auditor
 ### 1. scans
 Metadatos del escaneo.
 
-Campos mínimos sugeridos:
+Campos:
 - `scan_id` TEXT PK
 - `started_at` TEXT
 - `finished_at` TEXT
 - `duration_ms` INTEGER
 - `app_version` TEXT
 - `hostname` TEXT
+- `raw_json` TEXT NULL — respuesta completa del scan (shape del contrato).
+
+Sobre `raw_json`: es duplicación con razón explícita. Permite reconstruir un
+scan pasado con fidelidad total (exportación reproducible exigida por
+`docs/export-format.md` e historial en la UI) sin re-derivar snapshots desde
+tablas cuyo estado (baseline, perfiles) sigue evolucionando. Las tablas
+normalizadas siguen siendo la fuente para consultas analíticas.
 
 ### 2. network_observations
 Observaciones por conexión/finding dentro de un scan.
 
-Campos mínimos sugeridos:
+Campos:
 - `finding_id` TEXT PK
 - `scan_id` TEXT FK
 - `protocol` TEXT
@@ -41,6 +48,10 @@ Campos mínimos sugeridos:
 - `country` TEXT NULL
 - `pid` INTEGER
 - `process_name` TEXT
+- `ppid` INTEGER NULL — linaje (v0.3)
+- `parent_name` TEXT NULL — linaje (v0.3)
+- `command_line` TEXT NULL — contexto forense (v0.3)
+- `user_context` TEXT NULL — usuario del proceso (v0.3)
 
 ### 3. binary_identity
 Identidad física/lógica del binario.
@@ -81,11 +92,13 @@ Campos mínimos sugeridos:
 - `manual_validation` INTEGER
 
 ### 6. affinity_profiles
-Patrones de comportamiento de red conocidos.
+Patrones de comportamiento de red conocidos. Un perfil por combinación
+(binario, hostname, root_domain, asn, puerto); `times_seen` acumula refuerzos.
 
-Campos mínimos sugeridos:
-- `affinity_id` TEXT PK
+Campos:
+- `affinity_id` TEXT PK — clave determinista de la combinación
 - `binary_id` TEXT FK
+- `hostname` TEXT NULL — el modelo de afinidad usa hostname/FQDN como señal fuerte
 - `root_domain` TEXT NULL
 - `asn_org` TEXT NULL
 - `remote_port` INTEGER NULL
@@ -135,16 +148,29 @@ Campos mínimos sugeridos:
 - `message` TEXT
 - `created_at` TEXT
 
-## Índices mínimos recomendados
+## Índices
 
 - `network_observations(scan_id)`
 - `network_observations(remote_ip)`
 - `network_observations(root_domain)`
 - `binary_identity(sha256)`
-- `binary_identity(file_id, volume_serial)`
+- `binary_identity(file_id, volume_serial)` — lookup del identity cache
+- `binary_identity(normalized_path)` — fallback del identity cache
 - `baseline_entries(state)`
+- `baseline_entries(binary_id)`
 - `risk_decisions(risk_band)`
 - `affinity_profiles(binary_id)`
+- `audit_events(scan_id)`
+
+## Notas de implementación
+
+- `binary_id` es el SHA-256 del binario. Dos versiones del mismo archivo
+  físico son dos filas de `binary_identity`, enlazadas por su clave física
+  (`file_id + volume_serial`) o por `normalized_path` (minúsculas).
+- El build bundled de SQLite activa foreign keys por defecto: las escrituras
+  a tablas hijas garantizan primero la fila mínima en `binary_identity`.
+- Las migraciones se aplican como `ALTER TABLE ... ADD COLUMN` idempotentes al
+  abrir la base (ver `Storage::init_schema`).
 
 ## Reglas de diseño
 

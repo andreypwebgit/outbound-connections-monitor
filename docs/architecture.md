@@ -46,6 +46,10 @@ Responsabilidades:
 - emitir `reason_codes`;
 - decidir si hace falta Intel externo.
 
+El cálculo de afinidad vive en `core/affinity.rs` como submódulo de esta
+responsabilidad (perfiles históricos por binario, señales matched/mismatched
+y pesos documentados en `docs/implementation-notes.md`).
+
 ### 4. Baseline Manager
 Responsable de gestionar el ciclo de vida de los estados del baseline.
 
@@ -61,7 +65,7 @@ Estados válidos:
 ### 5. Identity Cache
 Responsable de evitar recalcular hash y trust si el archivo no ha cambiado.
 
-Clave sugerida de invalidación:
+Clave de invalidación:
 - `volume_serial`
 - `file_id`
 - `file_size`
@@ -71,6 +75,11 @@ Valor cacheado:
 - `sha256`
 - firma/trust
 - timestamp de verificación
+
+Implementación en dos niveles: persistente sobre SQLite
+(`binary_identity` + `trust_records`) y memoización por path dentro de un
+mismo scan. Un miss con identidad física conocida pero hash distinto expone
+`hash_changed`, que dispara la revalidación del baseline.
 
 ### 6. Storage
 Responsable de persistir scans, observations, identities, baseline, decisiones y auditoría en SQLite.
@@ -91,6 +100,13 @@ Responsable de exponer el backend al frontend.
 
 Comando principal:
 - `scan_now`
+
+Comandos de soporte:
+- `get_scan_history` — metadatos de los últimos escaneos persistidos
+- `get_scan` — recupera un scan completo persistido (shape del contrato)
+- `export_scan` — exporta un scan persistido a JSON o HTML
+- `record_manual_decision` — decisiones manuales de baseline
+  (`validate_local`, `revalidate_accept`)
 
 ## Flujo principal
 

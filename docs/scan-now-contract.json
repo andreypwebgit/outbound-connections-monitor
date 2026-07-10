@@ -123,7 +123,7 @@
           "process": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["pid", "name", "started_at", "path", "path_class", "file_missing", "orphaned"],
+            "required": ["pid", "name", "started_at", "path", "path_class", "file_missing", "orphaned", "services", "ppid", "parent_name", "command_line", "user"],
             "properties": {
               "pid": { "type": "integer", "minimum": 0 },
               "name": { "type": "string" },
@@ -134,7 +134,15 @@
                 "enum": ["Windows", "ProgramFiles", "ProgramFilesX86", "AppData", "Temp", "Downloads", "Desktop", "UserProfile", "Other", "Missing"]
               },
               "file_missing": { "type": "boolean" },
-              "orphaned": { "type": "boolean" }
+              "orphaned": { "type": "boolean" },
+              "services": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "ppid": { "type": ["integer", "null"], "minimum": 0 },
+              "parent_name": { "type": ["string", "null"] },
+              "command_line": { "type": ["string", "null"] },
+              "user": { "type": ["string", "null"] }
             }
           },
           "binary_identity": {
