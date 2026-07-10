@@ -1,6 +1,11 @@
 # Dependencias
 node_modules/
 
+# Contratos internos para agentes de codificación con IA (solo working tree
+# local; la documentación pública vive en README.md, Blueprint y docs/)
+AGENTS.md
+AGENTS-STRICT.md
+
 # Sistema
 .DS_Store
 
