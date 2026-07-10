@@ -1,5 +1,6 @@
-use std::collections::HashMap;
-use std::time::SystemTime;
+use std::collections::{HashMap, HashSet};
+use std::sync::{mpsc, Mutex, OnceLock};
+use std::time::{Duration, Instant, SystemTime};
 
 use chrono::{DateTime, Utc};
 use dns_lookup::lookup_addr;
@@ -7,13 +8,13 @@ use tauri::{command, Emitter};
 
 use crate::core::affinity::{extract_root_domain, is_private_ip, AffinityContext, AffinityEngine};
 use crate::core::baseline_manager::{BaselineManager, BaselineObservation};
-use crate::core::collector::Collector;
+use crate::core::collector::{Collector, RawObservation};
 use crate::core::enricher::{Enricher, SystemProcessMap};
 use crate::core::exporter::Exporter;
 use crate::core::identity_cache::IdentityCache;
 use crate::core::models::{
-    AbuseIpdbIntel, AffinityLevel, BaselineInfo, Finding, HostInfo, IntelInfo, LlmIntel, LocalEndpoint,
-    RemoteEndpoint, RiskInfo, ScanNowResponse, ScanSummary, VtIntel,
+    AbuseIpdbIntel, AffinityLevel, BaselineInfo, Finding, HostInfo, IntelInfo, LlmIntel,
+    LocalEndpoint, RemoteEndpoint, RiskInfo, ScanNowResponse, ScanSummary, VtIntel,
 };
 use crate::core::risk_engine::{RiskContext, RiskEngine};
 use crate::core::storage::Storage;
@@ -30,41 +31,70 @@ pub async fn scan_now(
 
     let _ = state.record_audit_event(Some(&scan_id), "scan_started", "Scan Now triggered");
 
-    app.emit("scan-progress", "Construyendo mapa de procesos del sistema...").unwrap_or(());
+    app.emit(
+        "scan-progress",
+        "Construyendo mapa de procesos del sistema...",
+    )
+    .unwrap_or(());
     let process_map = SystemProcessMap::build().map_err(|e| {
         let _ = state.record_audit_event(Some(&scan_id), "collector_error", &e.to_string());
         e.to_string()
     })?;
+    for warning in &process_map.warnings {
+        let _ = state.record_audit_event(Some(&scan_id), "enricher_warning", warning);
+        log::warn!("native process enrichment degraded: {}", warning);
+    }
 
-    app.emit("scan-progress", "Recolectando conexiones activas (netstat)...").unwrap_or(());
-    let raw_observations = Collector::collect_active_connections().map_err(|e| {
+    app.emit(
+        "scan-progress",
+        "Recolectando conexiones con APIs nativas de Windows...",
+    )
+    .unwrap_or(());
+    let collection = Collector::collect_active_connections().map_err(|e| {
         let _ = state.record_audit_event(Some(&scan_id), "collector_error", &e.to_string());
         e.to_string()
     })?;
+    for warning in &collection.warnings {
+        let _ = state.record_audit_event(Some(&scan_id), "collector_warning", warning);
+        log::warn!("native connection collection degraded: {}", warning);
+    }
+    let raw_observations = collection.observations;
 
     let _ = state.record_audit_event(
         Some(&scan_id),
         "observations_collected",
-        &format!("{} raw observations", raw_observations.len()),
+        &format!(
+            "{} TCP observations and {} UDP owner endpoints",
+            raw_observations.len(),
+            collection.udp_endpoint_count
+        ),
     );
 
     let mut identity_cache = IdentityCache::new();
-    // Memoizaciones por scan: DNS inverso por IP y baseline por binario.
-    let mut dns_memo: HashMap<String, Option<String>> = HashMap::new();
+    // DNS inverso paralelo con presupuesto total acotado. Las resoluciones
+    // que terminan más tarde quedan cacheadas para el próximo scan.
+    let dns_memo = resolve_hostnames(&raw_observations);
+    // Baseline: una evaluación por binario y por scan.
     let mut baseline_memo: HashMap<String, (BaselineInfo, bool, Option<String>)> = HashMap::new();
     // Los perfiles de afinidad del scan se registran al FINAL para que un
     // destino no coincida consigo mismo dentro del mismo scan.
     let mut pending_affinity: Vec<(String, Option<String>, Option<String>, u16)> = Vec::new();
 
     let mut findings = Vec::new();
-    let mut summary = ScanSummary::default();
-    summary.total_observations = raw_observations.len() as u32;
+    let mut summary = ScanSummary {
+        total_observations: raw_observations.len() as u32,
+        ..ScanSummary::default()
+    };
 
     for (index, obs) in raw_observations.into_iter().enumerate() {
         if index % 3 == 0 {
             app.emit(
                 "scan-progress",
-                format!("Analizando conexión {}/{}...", index + 1, summary.total_observations),
+                format!(
+                    "Analizando conexión {}/{}...",
+                    index + 1,
+                    summary.total_observations
+                ),
             )
             .unwrap_or(());
         }
@@ -76,19 +106,7 @@ pub async fn scan_now(
         };
 
         // --- DNS inverso (memoizado por IP; solo IPs públicas) ----------
-        let hostname = dns_memo
-            .entry(obs.remote_ip.clone())
-            .or_insert_with(|| {
-                if is_private_ip(&obs.remote_ip) {
-                    None
-                } else {
-                    obs.remote_ip
-                        .parse::<std::net::IpAddr>()
-                        .ok()
-                        .and_then(|ip| lookup_addr(&ip).ok())
-                }
-            })
-            .clone();
+        let hostname = dns_memo.get(&obs.remote_ip).cloned().flatten();
 
         let root_domain = hostname.as_deref().and_then(extract_root_domain);
 
@@ -107,17 +125,24 @@ pub async fn scan_now(
         let process_info = Enricher::get_process_info(obs.pid, &process_map);
         let resolved = identity_cache.resolve(process_info.path.as_ref(), &state);
 
-        if resolved.identity.sha256.is_none() && !process_info.file_missing && !process_info.orphaned {
+        if resolved.identity.sha256.is_none()
+            && !process_info.file_missing
+            && !process_info.orphaned
+        {
             let _ = state.record_audit_event(
                 Some(&scan_id),
                 "hash_error",
-                &format!("Could not hash binary for PID {} ({})", process_info.pid, process_info.name),
+                &format!(
+                    "Could not hash binary for PID {} ({})",
+                    process_info.pid, process_info.name
+                ),
             );
         }
 
         // Hallazgo crítico: huérfano o binario irresoluble no protegido.
         let critical = process_info.orphaned
-            || (process_info.file_missing && !Enricher::is_protected_system_process(&process_info.name));
+            || (process_info.file_missing
+                && !Enricher::is_protected_system_process(&process_info.name));
 
         // --- Continuidad de firmante tras cambio de hash ------------------
         let signer_continuity = if resolved.hash_changed {
@@ -149,7 +174,12 @@ pub async fn scan_now(
         let affinity = AffinityEngine::compute(&affinity_ctx, &state);
 
         if let Some(sha) = resolved.identity.sha256.as_ref() {
-            pending_affinity.push((sha.clone(), hostname.clone(), root_domain.clone(), obs.remote_port));
+            pending_affinity.push((
+                sha.clone(),
+                hostname.clone(),
+                root_domain.clone(),
+                obs.remote_port,
+            ));
         }
 
         // --- Baseline (una evaluación por binario y por scan) -------------
@@ -174,11 +204,17 @@ pub async fn scan_now(
                             previous_sha256: resolved.previous_sha256.as_ref(),
                             critical,
                             trust_valid: resolved.trust.signature_status == "Valid",
-                            path_suspicious: matches!(process_info.path_class.as_str(), "Temp" | "Downloads"),
+                            path_suspicious: matches!(
+                                process_info.path_class.as_str(),
+                                "Temp" | "Downloads"
+                            ),
                             affinity_level,
                         };
                         let info = BaselineManager::evaluate(&observation, &state, Some(&scan_id));
-                        baseline_memo.insert(sha.clone(), (info.clone(), critical, resolved.previous_sha256.clone()));
+                        baseline_memo.insert(
+                            sha.clone(),
+                            (info.clone(), critical, resolved.previous_sha256.clone()),
+                        );
                         info
                     }
                 }
@@ -279,14 +315,15 @@ pub async fn scan_now(
         duration_ms,
         host: HostInfo {
             platform: "windows".to_string(),
-            hostname: std::env::var("COMPUTERNAME").unwrap_or_else(|_| "unknown-host".to_string()),
+            hostname: windows_hostname(),
             app_version: env!("CARGO_PKG_VERSION").to_string(),
         },
         summary,
         findings,
     };
 
-    app.emit("scan-progress", "Guardando resultados...").unwrap_or(());
+    app.emit("scan-progress", "Guardando resultados...")
+        .unwrap_or(());
     // Export automático a JSON en el directorio de datos de la app
     // (raíz del repo en dev, %LOCALAPPDATA% en release).
     if let Err(e) = Exporter::export_to_json(&response, paths.last_scan_file()) {
@@ -305,4 +342,115 @@ pub async fn scan_now(
     );
 
     Ok(response)
+}
+
+const DNS_RESOLUTION_BUDGET: Duration = Duration::from_millis(200);
+static DNS_CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
+
+fn resolve_hostnames(observations: &[RawObservation]) -> HashMap<String, Option<String>> {
+    let cache = DNS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut results = HashMap::new();
+    let mut pending = Vec::new();
+
+    let public_ips = public_ips_to_resolve(observations);
+    if let Ok(cached) = cache.lock() {
+        for ip in public_ips {
+            if let Some(hostname) = cached.get(&ip) {
+                results.insert(ip, hostname.clone());
+            } else {
+                pending.push(ip);
+            }
+        }
+    } else {
+        pending.extend(public_ips);
+    }
+
+    let (sender, receiver) = mpsc::channel();
+    for ip_text in pending {
+        let sender = sender.clone();
+        std::thread::spawn(move || {
+            let hostname = ip_text
+                .parse::<std::net::IpAddr>()
+                .ok()
+                .and_then(|ip| lookup_addr(&ip).ok());
+            if let Ok(mut cached) = DNS_CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+                cached.insert(ip_text.clone(), hostname.clone());
+            }
+            let _ = sender.send((ip_text, hostname));
+        });
+    }
+    drop(sender);
+
+    let deadline = Instant::now() + DNS_RESOLUTION_BUDGET;
+    while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
+        match receiver.recv_timeout(remaining) {
+            Ok((ip, hostname)) => {
+                results.insert(ip, hostname);
+            }
+            Err(mpsc::RecvTimeoutError::Timeout | mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    results
+}
+
+fn public_ips_to_resolve(observations: &[RawObservation]) -> HashSet<String> {
+    observations
+        .iter()
+        .filter(|observation| !is_private_ip(&observation.remote_ip))
+        .map(|observation| observation.remote_ip.clone())
+        .collect()
+}
+
+#[cfg(windows)]
+fn windows_hostname() -> String {
+    let mut buffer = [0u16; 256];
+    let mut length = buffer.len() as u32;
+    let ok = unsafe { GetComputerNameW(buffer.as_mut_ptr(), &mut length) };
+    if ok != 0 && length > 0 {
+        String::from_utf16_lossy(&buffer[..length as usize])
+    } else {
+        "unknown-host".to_string()
+    }
+}
+
+#[cfg(not(windows))]
+fn windows_hostname() -> String {
+    "unknown-host".to_string()
+}
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+#[allow(non_snake_case)]
+extern "system" {
+    fn GetComputerNameW(buffer: *mut u16, size: *mut u32) -> i32;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn observation(remote_ip: &str) -> RawObservation {
+        RawObservation {
+            protocol: "TCP".to_string(),
+            state: "ESTABLISHED".to_string(),
+            local_ip: "192.168.1.2".to_string(),
+            local_port: 50_000,
+            remote_ip: remote_ip.to_string(),
+            remote_port: 443,
+            pid: 1,
+        }
+    }
+
+    #[test]
+    fn dns_candidates_are_public_and_deduplicated() {
+        let observations = vec![
+            observation("1.1.1.1"),
+            observation("1.1.1.1"),
+            observation("192.168.1.10"),
+            observation("127.0.0.1"),
+        ];
+        let candidates = public_ips_to_resolve(&observations);
+        assert_eq!(candidates, HashSet::from(["1.1.1.1".to_string()]));
+    }
 }
