@@ -91,11 +91,13 @@ impl AffinityEngine {
         }
 
         // --- Señales de dominio/hostname -------------------------------
-        let same_hostname = ctx.hostname.map_or(false, |h| {
-            profiles.iter().any(|p| p.hostname.as_deref() == Some(h))
-        });
-        let same_root_domain = ctx.root_domain.map_or(false, |rd| {
-            profiles.iter().any(|p| p.root_domain.as_deref() == Some(rd))
+        let same_hostname = ctx
+            .hostname
+            .is_some_and(|h| profiles.iter().any(|p| p.hostname.as_deref() == Some(h)));
+        let same_root_domain = ctx.root_domain.is_some_and(|rd| {
+            profiles
+                .iter()
+                .any(|p| p.root_domain.as_deref() == Some(rd))
         });
         let history_has_domains = profiles.iter().any(|p| p.root_domain.is_some());
 
@@ -122,7 +124,9 @@ impl AffinityEngine {
         }
 
         // --- Señal de puerto --------------------------------------------
-        let same_port = profiles.iter().any(|p| p.remote_port == Some(ctx.remote_port));
+        let same_port = profiles
+            .iter()
+            .any(|p| p.remote_port == Some(ctx.remote_port));
         if same_port {
             score += W_SAME_PORT as u16;
             matched.push("SAME_PORT".to_string());
@@ -137,7 +141,8 @@ impl AffinityEngine {
         // --- Patrón histórico repetido ----------------------------------
         let established = profiles.iter().any(|p| {
             p.times_seen >= 3
-                && (p.hostname.as_deref() == ctx.hostname || p.root_domain.as_deref() == ctx.root_domain)
+                && (p.hostname.as_deref() == ctx.hostname
+                    || p.root_domain.as_deref() == ctx.root_domain)
                 && p.remote_port == Some(ctx.remote_port)
         });
         if established {
@@ -153,7 +158,9 @@ impl AffinityEngine {
 
         // Cambio múltiple simultáneo de señales críticas: se explicita
         // aunque el score bajo ya lo refleje.
-        let domain_drifted = mismatched.iter().any(|s| s == "NEW_ROOT_DOMAIN" || s == "IP_ONLY_DESTINATION");
+        let domain_drifted = mismatched
+            .iter()
+            .any(|s| s == "NEW_ROOT_DOMAIN" || s == "IP_ONLY_DESTINATION");
         let port_drifted = mismatched.iter().any(|s| s == "NEW_PORT");
         if domain_drifted && port_drifted {
             mismatched.push("MULTI_SIGNAL_DRIFT".to_string());
@@ -184,7 +191,11 @@ impl AffinityEngine {
         }
     }
 
-    fn load_profiles(ctx: &AffinityContext, storage: &Storage, matched: &mut Vec<String>) -> Vec<AffinityProfile> {
+    fn load_profiles(
+        ctx: &AffinityContext,
+        storage: &Storage,
+        matched: &mut Vec<String>,
+    ) -> Vec<AffinityProfile> {
         let mut profiles = match ctx.binary_id {
             Some(id) => storage.get_affinity_profiles(id).unwrap_or_else(|e| {
                 log::warn!("affinity: failed to load profiles: {}", e);
@@ -243,9 +254,7 @@ pub fn extract_root_domain(hostname: &str) -> Option<String> {
 /// tratarse como "IP pura" sospechosa.
 pub fn is_private_ip(ip: &str) -> bool {
     match ip.parse::<IpAddr>() {
-        Ok(IpAddr::V4(v4)) => {
-            v4.is_private() || v4.is_link_local() || v4.is_loopback()
-        }
+        Ok(IpAddr::V4(v4)) => v4.is_private() || v4.is_link_local() || v4.is_loopback(),
         Ok(IpAddr::V6(v6)) => {
             v6.is_loopback()
                 // fe80::/10 link-local, fc00::/7 unique-local
@@ -260,7 +269,14 @@ pub fn is_private_ip(ip: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn seed_profile(storage: &Storage, binary_id: &str, hostname: Option<&str>, root: Option<&str>, port: u16, times: u32) {
+    fn seed_profile(
+        storage: &Storage,
+        binary_id: &str,
+        hostname: Option<&str>,
+        root: Option<&str>,
+        port: u16,
+        times: u32,
+    ) {
         for _ in 0..times {
             storage
                 .record_affinity_observation(binary_id, hostname, root, None, port)
@@ -289,9 +305,18 @@ mod tests {
 
     #[test]
     fn root_domain_extraction() {
-        assert_eq!(extract_root_domain("ax-0001.ax-msedge.net"), Some("ax-msedge.net".to_string()));
-        assert_eq!(extract_root_domain("edge.example.co.uk"), Some("example.co.uk".to_string()));
-        assert_eq!(extract_root_domain("example.com"), Some("example.com".to_string()));
+        assert_eq!(
+            extract_root_domain("ax-0001.ax-msedge.net"),
+            Some("ax-msedge.net".to_string())
+        );
+        assert_eq!(
+            extract_root_domain("edge.example.co.uk"),
+            Some("example.co.uk".to_string())
+        );
+        assert_eq!(
+            extract_root_domain("example.com"),
+            Some("example.com".to_string())
+        );
         assert_eq!(extract_root_domain("localhost"), None);
         assert_eq!(extract_root_domain("52.222.10.1"), None);
         assert_eq!(extract_root_domain(""), None);
@@ -312,33 +337,71 @@ mod tests {
     fn high_affinity_for_strong_repeat_match() {
         let storage = Storage::new_in_memory().unwrap();
         let bin = "a".repeat(64);
-        seed_profile(&storage, &bin, Some("api.example.com"), Some("example.com"), 443, 5);
+        seed_profile(
+            &storage,
+            &bin,
+            Some("api.example.com"),
+            Some("example.com"),
+            443,
+            5,
+        );
 
         let info = AffinityEngine::compute(
-            &ctx(Some(&bin), Some("api.example.com"), Some("example.com"), "8.8.8.8", 443),
+            &ctx(
+                Some(&bin),
+                Some("api.example.com"),
+                Some("example.com"),
+                "8.8.8.8",
+                443,
+            ),
             &storage,
         );
 
-        assert_eq!(info.level, "high", "score={} signals={:?}", info.score, info.matched_signals);
+        assert_eq!(
+            info.level, "high",
+            "score={} signals={:?}",
+            info.score, info.matched_signals
+        );
         assert!(info.matched_signals.contains(&"SAME_HOSTNAME".to_string()));
         assert!(info.matched_signals.contains(&"SAME_PORT".to_string()));
-        assert!(info.matched_signals.contains(&"ESTABLISHED_PATTERN".to_string()));
+        assert!(info
+            .matched_signals
+            .contains(&"ESTABLISHED_PATTERN".to_string()));
     }
 
     #[test]
     fn medium_affinity_for_new_subdomain_same_ecosystem() {
         let storage = Storage::new_in_memory().unwrap();
         let bin = "b".repeat(64);
-        seed_profile(&storage, &bin, Some("api.example.com"), Some("example.com"), 443, 5);
+        seed_profile(
+            &storage,
+            &bin,
+            Some("api.example.com"),
+            Some("example.com"),
+            443,
+            5,
+        );
 
         // Subdominio nuevo dentro del mismo root domain, mismo puerto.
         let info = AffinityEngine::compute(
-            &ctx(Some(&bin), Some("cdn.example.com"), Some("example.com"), "8.8.8.8", 443),
+            &ctx(
+                Some(&bin),
+                Some("cdn.example.com"),
+                Some("example.com"),
+                "8.8.8.8",
+                443,
+            ),
             &storage,
         );
 
-        assert_eq!(info.level, "medium", "score={} signals={:?}", info.score, info.matched_signals);
-        assert!(info.matched_signals.contains(&"SAME_ROOT_DOMAIN".to_string()));
+        assert_eq!(
+            info.level, "medium",
+            "score={} signals={:?}",
+            info.score, info.matched_signals
+        );
+        assert!(info
+            .matched_signals
+            .contains(&"SAME_ROOT_DOMAIN".to_string()));
         assert!(!info.matched_signals.contains(&"SAME_HOSTNAME".to_string()));
     }
 
@@ -346,15 +409,30 @@ mod tests {
     fn new_domain_degrades_affinity() {
         let storage = Storage::new_in_memory().unwrap();
         let bin = "c".repeat(64);
-        seed_profile(&storage, &bin, Some("api.example.com"), Some("example.com"), 443, 5);
+        seed_profile(
+            &storage,
+            &bin,
+            Some("api.example.com"),
+            Some("example.com"),
+            443,
+            5,
+        );
 
         let info = AffinityEngine::compute(
-            &ctx(Some(&bin), Some("evil.attacker.net"), Some("attacker.net"), "8.8.8.8", 443),
+            &ctx(
+                Some(&bin),
+                Some("evil.attacker.net"),
+                Some("attacker.net"),
+                "8.8.8.8",
+                443,
+            ),
             &storage,
         );
 
         assert!(info.score < 70, "unrelated domain must not reach medium");
-        assert!(info.mismatched_signals.contains(&"NEW_ROOT_DOMAIN".to_string()));
+        assert!(info
+            .mismatched_signals
+            .contains(&"NEW_ROOT_DOMAIN".to_string()));
     }
 
     #[test]
@@ -362,24 +440,51 @@ mod tests {
         // Regla 2 del modelo: el puerto no decide por sí solo.
         let storage = Storage::new_in_memory().unwrap();
         let bin = "d".repeat(64);
-        seed_profile(&storage, &bin, Some("api.example.com"), Some("example.com"), 443, 5);
+        seed_profile(
+            &storage,
+            &bin,
+            Some("api.example.com"),
+            Some("example.com"),
+            443,
+            5,
+        );
 
         // IP pura desconocida, mismo puerto 443.
-        let info = AffinityEngine::compute(&ctx(Some(&bin), None, None, "203.0.113.9", 443), &storage);
+        let info =
+            AffinityEngine::compute(&ctx(Some(&bin), None, None, "203.0.113.9", 443), &storage);
 
-        assert!(info.score < 70, "ip-only destination with matching port must stay low, got {}", info.score);
-        assert!(info.mismatched_signals.contains(&"IP_ONLY_DESTINATION".to_string()));
+        assert!(
+            info.score < 70,
+            "ip-only destination with matching port must stay low, got {}",
+            info.score
+        );
+        assert!(info
+            .mismatched_signals
+            .contains(&"IP_ONLY_DESTINATION".to_string()));
     }
 
     #[test]
     fn plausible_port_change_keeps_medium_with_same_domain() {
         let storage = Storage::new_in_memory().unwrap();
         let bin = "e".repeat(64);
-        seed_profile(&storage, &bin, Some("api.example.com"), Some("example.com"), 443, 5);
+        seed_profile(
+            &storage,
+            &bin,
+            Some("api.example.com"),
+            Some("example.com"),
+            443,
+            5,
+        );
 
         // Mismo hostname, puerto nuevo pero común (8443).
         let info = AffinityEngine::compute(
-            &ctx(Some(&bin), Some("api.example.com"), Some("example.com"), "8.8.8.8", 8443),
+            &ctx(
+                Some(&bin),
+                Some("api.example.com"),
+                Some("example.com"),
+                "8.8.8.8",
+                8443,
+            ),
             &storage,
         );
 
@@ -391,10 +496,23 @@ mod tests {
     fn rare_port_change_is_flagged() {
         let storage = Storage::new_in_memory().unwrap();
         let bin = "f".repeat(64);
-        seed_profile(&storage, &bin, Some("api.example.com"), Some("example.com"), 443, 5);
+        seed_profile(
+            &storage,
+            &bin,
+            Some("api.example.com"),
+            Some("example.com"),
+            443,
+            5,
+        );
 
         let info = AffinityEngine::compute(
-            &ctx(Some(&bin), Some("api.example.com"), Some("example.com"), "8.8.8.8", 4444),
+            &ctx(
+                Some(&bin),
+                Some("api.example.com"),
+                Some("example.com"),
+                "8.8.8.8",
+                4444,
+            ),
             &storage,
         );
 
@@ -408,52 +526,98 @@ mod tests {
         let bin = "0".repeat(64);
 
         let info = AffinityEngine::compute(
-            &ctx(Some(&bin), Some("api.example.com"), Some("example.com"), "8.8.8.8", 443),
+            &ctx(
+                Some(&bin),
+                Some("api.example.com"),
+                Some("example.com"),
+                "8.8.8.8",
+                443,
+            ),
             &storage,
         );
 
         assert_eq!(info.level, "none");
-        assert!(info.mismatched_signals.contains(&"NO_HISTORICAL_PROFILE".to_string()));
+        assert!(info
+            .mismatched_signals
+            .contains(&"NO_HISTORICAL_PROFILE".to_string()));
     }
 
     #[test]
     fn private_lan_destination_is_not_penalized_as_ip_only() {
         let storage = Storage::new_in_memory().unwrap();
         let info = AffinityEngine::compute(&ctx(None, None, None, "192.168.1.50", 8009), &storage);
-        assert!(!info.mismatched_signals.contains(&"IP_ONLY_DESTINATION".to_string()));
-        assert!(info.matched_signals.contains(&"PRIVATE_NETWORK_DESTINATION".to_string()));
+        assert!(!info
+            .mismatched_signals
+            .contains(&"IP_ONLY_DESTINATION".to_string()));
+        assert!(info
+            .matched_signals
+            .contains(&"PRIVATE_NETWORK_DESTINATION".to_string()));
     }
 
     #[test]
     fn revalidated_binary_inherits_previous_profiles() {
         let storage = Storage::new_in_memory().unwrap();
         let old_bin = "1".repeat(64);
-        seed_profile(&storage, &old_bin, Some("api.example.com"), Some("example.com"), 443, 5);
+        seed_profile(
+            &storage,
+            &old_bin,
+            Some("api.example.com"),
+            Some("example.com"),
+            443,
+            5,
+        );
 
         let new_bin = "2".repeat(64);
-        let mut context = ctx(Some(&new_bin), Some("api.example.com"), Some("example.com"), "8.8.8.8", 443);
+        let mut context = ctx(
+            Some(&new_bin),
+            Some("api.example.com"),
+            Some("example.com"),
+            "8.8.8.8",
+            443,
+        );
         context.fallback_binary_id = Some(&old_bin);
         context.signer_continuity = true;
 
         let info = AffinityEngine::compute(&context, &storage);
 
-        assert!(info.matched_signals.contains(&"INHERITED_HISTORY".to_string()));
+        assert!(info
+            .matched_signals
+            .contains(&"INHERITED_HISTORY".to_string()));
         assert!(info.matched_signals.contains(&"SAME_SIGNER".to_string()));
-        assert!(info.score >= 90, "revalidable change with same signer should stay high, got {}", info.score);
+        assert!(
+            info.score >= 90,
+            "revalidable change with same signer should stay high, got {}",
+            info.score
+        );
     }
 
     #[test]
     fn multi_signal_drift_is_explicit() {
         let storage = Storage::new_in_memory().unwrap();
         let bin = "3".repeat(64);
-        seed_profile(&storage, &bin, Some("api.example.com"), Some("example.com"), 443, 5);
+        seed_profile(
+            &storage,
+            &bin,
+            Some("api.example.com"),
+            Some("example.com"),
+            443,
+            5,
+        );
 
         let info = AffinityEngine::compute(
-            &ctx(Some(&bin), Some("x.unrelated.io"), Some("unrelated.io"), "8.8.8.8", 4444),
+            &ctx(
+                Some(&bin),
+                Some("x.unrelated.io"),
+                Some("unrelated.io"),
+                "8.8.8.8",
+                4444,
+            ),
             &storage,
         );
 
-        assert!(info.mismatched_signals.contains(&"MULTI_SIGNAL_DRIFT".to_string()));
+        assert!(info
+            .mismatched_signals
+            .contains(&"MULTI_SIGNAL_DRIFT".to_string()));
         assert_eq!(info.level, "none");
     }
 
@@ -461,7 +625,13 @@ mod tests {
     fn recording_observations_builds_profiles() {
         let storage = Storage::new_in_memory().unwrap();
         let bin = "4".repeat(64);
-        let context = ctx(Some(&bin), Some("api.example.com"), Some("example.com"), "8.8.8.8", 443);
+        let context = ctx(
+            Some(&bin),
+            Some("api.example.com"),
+            Some("example.com"),
+            "8.8.8.8",
+            443,
+        );
 
         AffinityEngine::record_observation(&context, &storage);
         AffinityEngine::record_observation(&context, &storage);

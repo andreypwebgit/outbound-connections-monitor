@@ -1,5 +1,7 @@
 use crate::core::enricher::Enricher;
-use crate::core::models::{AffinityInfo, BaselineInfo, BinaryIdentity, ProcessInfo, RiskInfo, TrustInfo};
+use crate::core::models::{
+    AffinityInfo, BaselineInfo, BinaryIdentity, ProcessInfo, RiskInfo, TrustInfo,
+};
 
 /// Contexto completo de evaluación de riesgo para un finding.
 pub struct RiskContext<'a> {
@@ -180,9 +182,10 @@ impl RiskEngine {
 
         // Códigos descriptivos de destino (sin puntuación adicional: los
         // puntos ya los aporta la señal de afinidad; estos explican).
-        let known_destination = ctx.affinity.matched_signals.iter().any(|s| {
-            s == "SAME_HOSTNAME" || s == "SAME_ROOT_DOMAIN" || s == "ESTABLISHED_PATTERN"
-        });
+        let known_destination =
+            ctx.affinity.matched_signals.iter().any(|s| {
+                s == "SAME_HOSTNAME" || s == "SAME_ROOT_DOMAIN" || s == "ESTABLISHED_PATTERN"
+            });
         let new_destination = ctx
             .affinity
             .mismatched_signals
@@ -212,12 +215,10 @@ impl RiskEngine {
                 score -= 10;
                 push(&mut reason_codes, "KNOWN_HASH");
             }
-            "Observed_Local" => {
-                if ctx.baseline.manual_validation {
-                    score -= 20;
-                    push(&mut reason_codes, "LOCAL_OBSERVED");
-                    push(&mut reason_codes, "MANUAL_TRUST");
-                }
+            "Observed_Local" if ctx.baseline.manual_validation => {
+                score -= 20;
+                push(&mut reason_codes, "LOCAL_OBSERVED");
+                push(&mut reason_codes, "MANUAL_TRUST");
             }
             _ => {}
         }
@@ -242,11 +243,12 @@ impl RiskEngine {
         // La acción recomendada sale de la banda, con un override explicable:
         // un baseline en Revalidation_Required siempre recomienda `revalidate`
         // aunque el resto de señales dejen la banda por debajo de known_high.
-        let recommended_action = if ctx.baseline.state == "Revalidation_Required" && band != "potentially_dangerous" {
-            "revalidate".to_string()
-        } else {
-            Self::band_to_action(&band)
-        };
+        let recommended_action =
+            if ctx.baseline.state == "Revalidation_Required" && band != "potentially_dangerous" {
+                "revalidate".to_string()
+            } else {
+                Self::band_to_action(&band)
+            };
 
         RiskInfo {
             score,
@@ -371,12 +373,18 @@ mod tests {
             ip_only_destination: false,
         };
         let risk = RiskEngine::evaluate(&ctx);
-        assert_eq!(risk.band, "known_safe", "score={} reasons={:?}", risk.score, risk.reason_codes);
+        assert_eq!(
+            risk.band, "known_safe",
+            "score={} reasons={:?}",
+            risk.score, risk.reason_codes
+        );
         assert_eq!(risk.recommended_action, "ignore");
         assert!(risk.reason_codes.contains(&"KNOWN_HASH".to_string()));
         assert!(risk.reason_codes.contains(&"VALID_SIGNATURE".to_string()));
         assert!(risk.reason_codes.contains(&"HIGH_AFFINITY".to_string()));
-        assert!(risk.reason_codes.contains(&"ESTABLISHED_BASELINE".to_string()));
+        assert!(risk
+            .reason_codes
+            .contains(&"ESTABLISHED_BASELINE".to_string()));
     }
 
     #[test]
@@ -432,7 +440,9 @@ mod tests {
             ip_only_destination: false,
         };
         let risk2 = RiskEngine::evaluate(&ctx2);
-        assert!(risk2.reason_codes.contains(&"PROTECTED_SYSTEM_PROCESS".to_string()));
+        assert!(risk2
+            .reason_codes
+            .contains(&"PROTECTED_SYSTEM_PROCESS".to_string()));
         assert!(!risk2.reason_codes.contains(&"FILE_MISSING".to_string()));
         assert_ne!(risk2.band, "potentially_dangerous");
     }
@@ -453,7 +463,9 @@ mod tests {
         let risk = RiskEngine::evaluate(&ctx);
         assert_eq!(risk.recommended_action, "revalidate");
         assert!(risk.reason_codes.contains(&"NEW_HASH".to_string()));
-        assert!(risk.reason_codes.contains(&"REVALIDATION_REQUIRED".to_string()));
+        assert!(risk
+            .reason_codes
+            .contains(&"REVALIDATION_REQUIRED".to_string()));
         assert_ne!(risk.band, "known_safe");
     }
 
@@ -497,7 +509,9 @@ mod tests {
             ip_only_destination: true,
         };
         let risk = RiskEngine::evaluate(&ctx);
-        assert!(risk.reason_codes.contains(&"IP_ONLY_DESTINATION".to_string()));
+        assert!(risk
+            .reason_codes
+            .contains(&"IP_ONLY_DESTINATION".to_string()));
         assert!(risk.reason_codes.contains(&"LOW_AFFINITY".to_string()));
         assert!(risk.score >= 15);
     }
@@ -540,7 +554,9 @@ mod tests {
             ip_only_destination: false,
         };
         let risk = RiskEngine::evaluate(&ctx);
-        assert!(risk.reason_codes.contains(&"OFFICE_SPAWNED_NETWORK_PROCESS".to_string()));
+        assert!(risk
+            .reason_codes
+            .contains(&"OFFICE_SPAWNED_NETWORK_PROCESS".to_string()));
         assert_eq!(risk.band, "potentially_dangerous");
     }
 
@@ -559,7 +575,9 @@ mod tests {
             ip_only_destination: false,
         };
         let risk = RiskEngine::evaluate(&ctx);
-        assert!(risk.reason_codes.contains(&"SUSPICIOUS_COMMAND_LINE".to_string()));
+        assert!(risk
+            .reason_codes
+            .contains(&"SUSPICIOUS_COMMAND_LINE".to_string()));
         assert_eq!(risk.band, "potentially_dangerous");
     }
 
@@ -599,6 +617,9 @@ mod tests {
         assert_eq!(RiskEngine::band_to_action("known_low"), "observe");
         assert_eq!(RiskEngine::band_to_action("known_moderate"), "review");
         assert_eq!(RiskEngine::band_to_action("known_high"), "revalidate");
-        assert_eq!(RiskEngine::band_to_action("potentially_dangerous"), "investigate");
+        assert_eq!(
+            RiskEngine::band_to_action("potentially_dangerous"),
+            "investigate"
+        );
     }
 }

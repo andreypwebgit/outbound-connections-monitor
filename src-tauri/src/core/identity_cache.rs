@@ -32,9 +32,17 @@ pub struct IdentityCache {
     memo: HashMap<String, ResolvedIdentity>,
 }
 
+impl Default for IdentityCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IdentityCache {
     pub fn new() -> Self {
-        Self { memo: HashMap::new() }
+        Self {
+            memo: HashMap::new(),
+        }
     }
 
     pub fn resolve(&mut self, path: Option<&String>, storage: &Storage) -> ResolvedIdentity {
@@ -66,7 +74,12 @@ impl IdentityCache {
         let normalized_path = path_str.to_lowercase();
 
         // Búsqueda de identidad previa: clave física primero, ruta como fallback.
-        let stored = self.find_stored(storage, &stat.volume_serial, &stat.file_id, &normalized_path);
+        let stored = self.find_stored(
+            storage,
+            &stat.volume_serial,
+            &stat.file_id,
+            &normalized_path,
+        );
 
         // HIT: clave de invalidación intacta -> reutilizar hash y trust.
         if let Some(ref prev) = stored {

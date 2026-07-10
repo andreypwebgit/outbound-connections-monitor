@@ -48,6 +48,7 @@ Elemento con señales suficientemente fuertes como para priorización inmediata.
 
 - `Unknown -> Candidate`
 - `Candidate -> Observed_Local`
+- `Observed_Local -> Candidate` (solo revocación manual explícita)
 - `Candidate -> Baseline_Provisional`
 - `Baseline_Provisional -> Baseline_Consolidated`
 - `Baseline_Consolidated -> Revalidation_Required`
@@ -69,6 +70,11 @@ Un cambio de hash en un elemento conocido no debe ignorarse. Debe empujar a `Rev
 
 ### 5. Procesos huérfanos no aprenden
 Si un proceso tiene conexión activa y su binario no existe o no puede resolverse correctamente, no pasa por ciclo normal de aprendizaje. Se trata como hallazgo crítico.
+
+### 6. Revocar una validación manual no edita estado libremente
+La acción `revoke_local_validation` solo permite
+`Observed_Local -> Candidate`, elimina `manual_validation` y deja que el
+binario vuelva a aprender desde el estado intermedio.
 
 ## Señales útiles para promoción prudente
 

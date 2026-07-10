@@ -18,10 +18,17 @@ La arquitectura debe ser pequeña, explicable y modular. No se permiten sidecars
 Responsable de obtener el snapshot de conexiones salientes activas visibles y asociarlas a procesos.
 
 Responsabilidades:
-- enumerar conexiones TCP activas;
-- enumerar endpoints UDP relevantes si aplica;
+- enumerar conexiones TCP IPv4/IPv6 activas mediante
+  `GetExtendedTcpTable` (sin parsing localizado);
+- enumerar endpoints UDP con PID mediante `GetExtendedUdpTable`; como esta
+  API no expone peer remoto, no inventar findings UDP;
 - asociar conexión a PID/proceso;
 - producir observaciones crudas consistentes.
+
+El inventario de procesos usa Toolhelp + APIs de proceso/token/servicios para
+ruta, PPID, usuario, inicio, command line y servicios. Un fallo parcial deja
+el campo afectado sin resolver. Authenticode permanece en PowerShell y queda
+amortizado por el identity cache.
 
 ### 2. Enricher
 Responsable de enriquecer cada observación con identidad del binario, trust y contexto de red.
@@ -104,9 +111,17 @@ Comando principal:
 Comandos de soporte:
 - `get_scan_history` — metadatos de los últimos escaneos persistidos
 - `get_scan` — recupera un scan completo persistido (shape del contrato)
+- `get_scan_comparison` — compara un scan persistido con su predecesor
+- `get_baseline_entries` — proyección de lectura para gestionar el baseline
 - `export_scan` — exporta un scan persistido a JSON o HTML
 - `record_manual_decision` — decisiones manuales de baseline
-  (`validate_local`, `revalidate_accept`)
+  (`validate_local`, `revoke_local_validation`, `revalidate_accept`)
+
+### 10. Scan Diff
+
+Consulta pura sobre dos payloads `scans.raw_json`. Identifica conexiones
+nuevas/cambiadas, binarios nuevos y cambios de baseline sin modificar el
+contrato `scan_now` ni el estado de aprendizaje.
 
 ## Flujo principal
 

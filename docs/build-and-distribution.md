@@ -7,8 +7,9 @@ distribuirlos a equipos que no tienen herramientas de desarrollo.
 
 Desde v0.4.1 la vía recomendada es el pipeline de GitHub Actions:
 
-- **`.github/workflows/ci.yml`** — en cada push/PR a `main` compila el
-  proyecto y ejecuta la suite completa de tests en un runner Windows.
+- **`.github/workflows/ci.yml`** — en cada push/PR a `main` compila Tailwind,
+  exige `cargo fmt --check`, ejecuta Clippy con warnings como error y lanza la
+  suite completa de tests en un runner Windows.
 - **`.github/workflows/release.yml`** — al empujar un tag `v*` ejecuta los
   tests, compila los instaladores (`npx tauri build`), genera
   `checksums.txt` (SHA-256) y **publica la release de GitHub** con los tres
@@ -124,19 +125,18 @@ desinstalación **no** borra `%LOCALAPPDATA%\com.apwebai.out-cxns-monitor\`
 
 ## Resultado del build verificado
 
-Build de referencia: 2026-07-10, `npx tauri build`, Tauri 2.11.x, perfil
-release, exit code 0, "Finished 2 bundles".
+Build de referencia: 2026-07-10, v0.5.0, `npx tauri build`, Tauri 2.11.x,
+perfil release, exit code 0, "Finished 2 bundles".
 
 | Artefacto | Tamaño |
 |---|---|
-| `bundle/msi/out-cxns-monitor_0.4.0_x64_en-US.msi` | 3,99 MB |
-| `bundle/nsis/out-cxns-monitor_0.4.0_x64-setup.exe` | 2,78 MB |
-| `target/release/app.exe` (binario suelto, sin instalador) | 11,05 MB |
+| `bundle/msi/out-cxns-monitor_0.5.0_x64_en-US.msi` | 3,82 MiB |
+| `bundle/nsis/out-cxns-monitor_0.5.0_x64-setup.exe` | 2,65 MiB |
+| `target/release/app.exe` (binario suelto, sin instalador) | 10,60 MiB |
 
 Nota: el binario suelto conserva el nombre del package Cargo (`app.exe`); los
 instaladores lo despliegan como `out-cxns-monitor.exe` con accesos directos.
 
-Smoke test realizado sobre el binario release: arranca con doble clic, crea
-`%LOCALAPPDATA%\com.apwebai.out-cxns-monitor\ocm_baseline.db` con el esquema
-inicializado (139 KB) y el perfil de WebView2 (`EBWebView/`), sin requerir
-permisos de administrador ni herramientas de desarrollo.
+Smoke test v0.5.0 realizado con `npx tauri dev`: ventana WebView2 operativa,
+scan real, historial/diff y gestión del baseline renderizados. Con identity
+cache completamente caliente, un snapshot de 45 findings terminó en 366 ms.

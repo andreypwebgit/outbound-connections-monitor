@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Validar que la v0.1 es útil, estable, explicable y que no degrada su arquitectura con cambios no controlados.
+Validar que OCM es útil, estable, explicable y que no degrada su arquitectura con cambios no controlados.
 
 ## Principios
 
@@ -66,6 +66,11 @@ Validar:
 - persistencia de baseline y decisiones;
 - índices y consultas básicas esperadas.
 
+### 8. Collector, diff y gestión de baseline
+Validar parsing binario de tablas TCP, filtros de estado, deduplicación del
+diff, selección cronológica del scan anterior y proyecciones/acciones de la
+vista de baseline.
+
 ## Escenarios mínimos obligatorios
 
 1. proceso firmado, hash conocido y destino habitual;
@@ -94,6 +99,10 @@ Validar:
   `docs/scan-now-contract.json` con un mini-validador de JSON Schema, sin
   dependencias) y `src-tauri/tests/storage_test.rs` (SQLite end-to-end).
 - Ejecución: `cargo test` dentro de `src-tauri/`.
+
+Suite v0.5.0: **86 tests** (69 unitarios + 8 de contrato + 9 de integración
+SQLite). CI ejecuta además `cargo fmt --check` y
+`cargo clippy --locked --all-targets -- -D warnings`.
 
 Los mocks de VirusTotal/AbuseIPDB quedan pendientes de que exista el bloque
 de Intel externo (opcional, no implementado en el motor local).

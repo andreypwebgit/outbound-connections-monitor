@@ -205,13 +205,14 @@ mezclando conceptos de riesgo y baseline.)
   (`embedded | catalog | none | unknown`) usando `SignatureType` de
   `Get-AuthenticodeSignature`; antes se emitía el valor fuera de contrato
   `"powershell"`. `chain_status` se mapea a `Trusted | Untrusted | Unknown`.
-- `process.started_at` se rellena desde `CreationDate` (WMIC) o CIM.
+- `process.started_at` se rellena desde `GetProcessTimes` y se normaliza a
+  RFC3339 UTC.
 
 ## 7. Enricher
 
-- WMIC sigue siendo la vía primaria (rápida); si no está disponible (builds
-  recientes de Windows 11 lo eliminan), se degrada a PowerShell
-  `Get-CimInstance` con salida JSON. Igual para el mapeo de servicios.
+- `SystemProcessMap` se construye con Toolhelp y APIs nativas de
+  proceso/token/servicios. No depende de WMIC, CIM ni `tasklist`; los campos
+  que Windows deniega quedan sin resolver y el scan continúa.
 - `classify_path` compara **componentes** del path, no substrings del string
   completo: `C:\Windows\Temp\x.exe` es `Temp` (no `Windows`) y
   `C:\Program Files\ContemplateApp` ya no cae en `Temp`. Orden de evaluación:
@@ -304,3 +305,65 @@ de `CARGO_PKG_VERSION`; el hostname real sale de `COMPUTERNAME`.
   al navegador por defecto dentro de la webview de Tauri 2; el comando
   `open_external` (rundll32 `url.dll,FileProtocolHandler`, URL validada, sin
   shell) los abre y `app.js` intercepta el click.
+
+## 14. v0.5.0
+
+### 14.1 Collector y procesos nativos
+
+- `GetExtendedTcpTable` (`TCP_TABLE_OWNER_PID_ALL`) sustituye `netstat -ano`
+  para TCP IPv4/IPv6. Cada familia degrada de forma independiente y solo se
+  aborta el scan si fallan ambas.
+- `GetExtendedUdpTable` enumera endpoints UDP con PID, pero la API no ofrece
+  peer remoto. Por honestidad del contrato no se generan findings UDP sin
+  destino; el número de endpoints queda en auditoría técnica.
+- El mapa de procesos usa `CreateToolhelp32Snapshot`, `OpenProcess`,
+  `QueryFullProcessImageNameW`, `GetProcessTimes`, token/`LookupAccountSidW`,
+  `NtQueryInformationProcess(ProcessCommandLineInformation)` y
+  `EnumServicesStatusExW`. Un proceso protegido conserva nombre/PPID y deja
+  a `null` los campos que Windows deniegue.
+- El hostname del equipo usa `GetComputerNameW`; no depende de que exista la
+  variable de entorno `COMPUTERNAME`.
+- Authenticode **permanece en PowerShell**: nativizar `WinVerifyTrust` y el
+  catálogo no aporta complejidad neta favorable en esta iteración, mientras
+  el caché por SHA-256 evita repetir la llamada en scans calientes.
+
+### 14.2 Presupuesto de DNS y rendimiento
+
+El DNS inverso dejó de ser secuencial. Las IP públicas se resuelven en
+paralelo con presupuesto total de 200 ms y caché en memoria de proceso. Una
+respuesta tardía se guarda para el próximo scan; el snapshot actual mantiene
+`hostname/root_domain = null`, sin inventar datos.
+
+Smoke local Windows (48 findings, caché de identidad completamente caliente):
+**371 ms**. Un snapshot con binarios nuevos puede seguir tardando varios
+segundos por Authenticode, comportamiento explícitamente aceptado para v0.5.
+
+### 14.3 Comparativa entre scans
+
+`get_scan_comparison(scan_id)` carga el payload actual y su predecesor desde
+`scans.raw_json`; no modifica `scan_now` (`schema_version` continúa en `v1`).
+
+- identidad de conexión: binario + protocolo + IP remota + puerto remoto;
+- identidad de binario: SHA-256, con fallback a ruta y finalmente nombre si
+  el binario no pudo resolverse;
+- el estado TCP se compara aparte para marcar `CAMBIO` sin contarlo como una
+  conexión nueva;
+- los recuentos deduplican sockets equivalentes y el primer scan no muestra
+  falsos badges `NUEVO` al carecer de referencia.
+
+### 14.4 Gestión del baseline
+
+`get_baseline_entries` es una proyección de lectura de identidades, trust,
+contadores, validación y última decisión. Las mutaciones siguen pasando
+exclusivamente por `BaselineManager`.
+
+Nueva decisión manual requerida por producto:
+`revoke_local_validation`: `Observed_Local -> Candidate`, con
+`manual_validation = false`. `revalidate_accept` también limpia esa marca al
+volver a `Candidate`; no se permite editar estados libremente.
+
+### 14.5 Calidad
+
+CI ejecuta `cargo fmt --check` y
+`cargo clippy --locked --all-targets -- -D warnings` antes de los tests. La
+suite v0.5.0 contiene 86 tests. No se añadieron crates ni dependencias JS.

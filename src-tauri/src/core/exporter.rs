@@ -9,7 +9,10 @@ pub struct Exporter;
 impl Exporter {
     /// Exporta el scan a JSON con el mismo shape del contrato `scan_now`
     /// (docs/export-format.md: el JSON exportado respeta el contrato).
-    pub fn export_to_json(response: &ScanNowResponse, path: impl AsRef<Path>) -> Result<(), AppError> {
+    pub fn export_to_json(
+        response: &ScanNowResponse,
+        path: impl AsRef<Path>,
+    ) -> Result<(), AppError> {
         let json = serde_json::to_string_pretty(response)
             .map_err(|e| AppError::SystemError(format!("JSON serialization failed: {}", e)))?;
 
@@ -23,7 +26,10 @@ impl Exporter {
     /// findings con banda, baseline, proceso/ruta/destino, reason codes y
     /// recomendación. No reinterpreta datos: lo no resuelto se muestra como
     /// "unknown".
-    pub fn export_to_html(response: &ScanNowResponse, path: impl AsRef<Path>) -> Result<(), AppError> {
+    pub fn export_to_html(
+        response: &ScanNowResponse,
+        path: impl AsRef<Path>,
+    ) -> Result<(), AppError> {
         let html = Self::render_html(response);
         fs::write(path, html).map_err(AppError::IoError)?;
         Ok(())
@@ -127,7 +133,11 @@ impl Exporter {
     fn render_finding(finding: &Finding) -> String {
         let hostname = finding.remote.hostname.as_deref().unwrap_or("unknown");
         let path = finding.process.path.as_deref().unwrap_or("unknown");
-        let sha = finding.binary_identity.sha256.as_deref().unwrap_or("unknown");
+        let sha = finding
+            .binary_identity
+            .sha256
+            .as_deref()
+            .unwrap_or("unknown");
         let reasons = finding
             .risk
             .reason_codes
@@ -191,7 +201,7 @@ mod tests {
             host: HostInfo {
                 platform: "windows".to_string(),
                 hostname: "TEST-PC".to_string(),
-                app_version: "0.4.0".to_string(),
+                app_version: "0.5.0".to_string(),
             },
             summary: ScanSummary {
                 total_observations: 1,
@@ -207,7 +217,10 @@ mod tests {
                 finding_id: "FND-1".to_string(),
                 protocol: "TCP".to_string(),
                 state: "ESTABLISHED".to_string(),
-                local: LocalEndpoint { ip: "192.168.1.2".to_string(), port: 51000 },
+                local: LocalEndpoint {
+                    ip: "192.168.1.2".to_string(),
+                    port: 51000,
+                },
                 remote: RemoteEndpoint {
                     ip: "8.8.8.8".to_string(),
                     port: 443,
@@ -293,7 +306,10 @@ mod tests {
     #[test]
     fn html_export_escapes_untrusted_strings() {
         let html = Exporter::render_html(&sample_response());
-        assert!(!html.contains("app<script>.exe"), "process names must be escaped");
+        assert!(
+            !html.contains("app<script>.exe"),
+            "process names must be escaped"
+        );
         assert!(html.contains("app&lt;script&gt;.exe"));
     }
 

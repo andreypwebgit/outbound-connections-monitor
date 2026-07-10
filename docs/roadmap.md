@@ -43,6 +43,17 @@ Posibles mejoras:
 - gestión de baseline más ergonómica
 - más contexto de cambios entre versiones
 
+## v0.5.0 — completada
+
+- collector TCP IPv4/IPv6 y procesos mediante APIs nativas de Windows;
+- DNS inverso paralelo con presupuesto acotado;
+- comparativa entre scans persistidos (`NUEVO` / `CAMBIO`);
+- vista de gestión del baseline con transiciones manuales válidas;
+- CI con formato y Clippy sin warnings.
+
+Se mantiene deliberadamente fuera: monitorización continua, bloqueo,
+remediación e intel externo obligatorio.
+
 ## v1.0
 
 Objetivo:

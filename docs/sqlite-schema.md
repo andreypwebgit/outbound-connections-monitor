@@ -30,6 +30,10 @@ scan pasado con fidelidad total (exportación reproducible exigida por
 tablas cuyo estado (baseline, perfiles) sigue evolucionando. Las tablas
 normalizadas siguen siendo la fuente para consultas analíticas.
 
+En v0.5, `get_scan_comparison` lee dos payloads `raw_json` consecutivos. No
+necesita tabla de diff: el resultado es derivado y no se persiste, evitando
+estado duplicado que pudiera quedar obsoleto.
+
 ### 2. network_observations
 Observaciones por conexión/finding dentro de un scan.
 
@@ -90,6 +94,10 @@ Campos mínimos sugeridos:
 - `first_seen` TEXT NULL
 - `last_seen` TEXT NULL
 - `manual_validation` INTEGER
+
+La vista de gestión combina esta tabla con `binary_identity`, `trust_records`
+y la última fila de `manual_decisions`; es una proyección de lectura, no una
+tabla adicional ni una vía de edición libre.
 
 ### 6. affinity_profiles
 Patrones de comportamiento de red conocidos. Un perfil por combinación

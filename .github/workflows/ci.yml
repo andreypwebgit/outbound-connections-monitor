@@ -32,6 +32,14 @@ jobs:
         with:
           workspaces: src-tauri -> target
 
+      - name: Check Rust formatting
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Run Clippy (warnings are errors)
+        working-directory: src-tauri
+        run: cargo clippy --locked --all-targets -- -D warnings
+
       - name: Run tests
         working-directory: src-tauri
         run: cargo test --locked

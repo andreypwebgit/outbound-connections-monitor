@@ -20,7 +20,11 @@ pub async fn export_scan(
 ) -> Result<String, String> {
     // El scan_id forma parte del nombre de archivo: solo se aceptan IDs con
     // el alfabeto que genera la propia app (evita separadores de ruta).
-    if scan_id.is_empty() || !scan_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if scan_id.is_empty()
+        || !scan_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         return Err(format!("Invalid scan id '{}'", scan_id));
     }
 
@@ -45,7 +49,12 @@ pub async fn export_scan(
             let result = Exporter::export_to_html(&response, &path);
             (path, result)
         }
-        other => return Err(format!("Unsupported export format '{}': use json or html", other)),
+        other => {
+            return Err(format!(
+                "Unsupported export format '{}': use json or html",
+                other
+            ))
+        }
     };
 
     result.map_err(|e| e.to_string())?;
@@ -58,5 +67,8 @@ pub async fn export_scan(
 
     let absolute = fs::canonicalize(&file_name).unwrap_or(file_name);
     // canonicalize en Windows produce prefijo \\?\ que ensucia la UI.
-    Ok(absolute.to_string_lossy().trim_start_matches(r"\\?\").to_string())
+    Ok(absolute
+        .to_string_lossy()
+        .trim_start_matches(r"\\?\")
+        .to_string())
 }

@@ -60,6 +60,9 @@ mod tests {
             paths.exports_dir(),
             PathBuf::from(r"C:\Users\dev\AppData\Local\ocm\exports")
         );
-        assert_eq!(paths.data_dir(), Path::new(r"C:\Users\dev\AppData\Local\ocm"));
+        assert_eq!(
+            paths.data_dir(),
+            Path::new(r"C:\Users\dev\AppData\Local\ocm")
+        );
     }
 }

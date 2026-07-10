@@ -5,7 +5,9 @@ use tauri::command;
 /// valida por defensa en profundidad.
 fn is_safe_external_url(url: &str) -> bool {
     (url.starts_with("https://") || url.starts_with("http://"))
-        && !url.chars().any(|c| c.is_whitespace() || c.is_control() || c == '"' || c == '\'')
+        && !url
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control() || c == '"' || c == '\'')
 }
 
 /// Abre una URL http(s) en el navegador por defecto del sistema.
@@ -18,7 +20,10 @@ fn is_safe_external_url(url: &str) -> bool {
 #[command]
 pub async fn open_external(url: String) -> Result<(), String> {
     if !is_safe_external_url(&url) {
-        return Err(format!("Refusing to open URL '{}': only plain http(s) URLs are allowed", url));
+        return Err(format!(
+            "Refusing to open URL '{}': only plain http(s) URLs are allowed",
+            url
+        ));
     }
 
     std::process::Command::new("rundll32.exe")
@@ -42,7 +47,9 @@ mod tests {
 
     #[test]
     fn rejects_non_http_schemes_and_shell_metacharacters() {
-        assert!(!is_safe_external_url("file:///C:/Windows/system32/calc.exe"));
+        assert!(!is_safe_external_url(
+            "file:///C:/Windows/system32/calc.exe"
+        ));
         assert!(!is_safe_external_url("javascript:alert(1)"));
         assert!(!is_safe_external_url("C:\\Windows\\system32\\calc.exe"));
         assert!(!is_safe_external_url("https://x.com/a b"));

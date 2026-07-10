@@ -21,8 +21,9 @@ Cuando una fase falla:
 ## Fallos previstos
 
 ### 1. Fallo al enumerar conexiones
-Si el collector no puede obtener observaciones, el scan puede fallar como operación global.
-Este es uno de los pocos fallos potencialmente críticos.
+El collector consulta IPv4 e IPv6 por separado. Si una familia falla, conserva
+la otra y registra `collector_warning`; solo falla la operación global cuando
+fallan ambas tablas TCP.
 
 ### 2. Fallo al resolver proceso o path
 El finding debe seguir existiendo si la conexión fue observada, pero con path ausente o estado degradado.
@@ -39,6 +40,8 @@ Marcar `signature_status` o `chain_status` como `Unknown` si no puede resolverse
 ### 5. Fallo en hostname, ASN o enriquecimiento de red
 Mantener IP y puerto observados.
 Marcar resto de campos como `null` o `unknown`.
+El DNS inverso tiene un presupuesto total de 200 ms: las resoluciones tardías
+no bloquean el scan y quedan cacheadas en memoria para snapshots posteriores.
 
 ### 6. Fallo de Intel externo
 No romper el escaneo.

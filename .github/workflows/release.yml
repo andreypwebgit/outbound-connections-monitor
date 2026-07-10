@@ -54,7 +54,7 @@ jobs:
           body: |
             ## 🌐 [ocm.apwebai.es](https://ocm.apwebai.es/) — web oficial del proyecto
 
-            **Outbound Connections Monitor (OCM)**: escaneo manual de conexiones salientes en Windows con identidad SHA-256, firma Authenticode, linaje de procesos, baseline progresivo y afinidad de red. 100 % local.
+            **Outbound Connections Monitor (OCM)**: escaneo manual de conexiones salientes en Windows con collector nativo, identidad SHA-256, firma Authenticode, linaje de procesos, comparativa entre scans, baseline gestionable y afinidad de red. 100 % local.
 
             ### 📦 Instalación
 
