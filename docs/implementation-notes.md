@@ -1,9 +1,16 @@
 # Implementation Notes
 
 Decisiones de implementación tomadas donde la documentación normativa
-(`AGENTS.md`, `docs/*.md`) define el modelo pero no fija valores o detalles
-concretos. Este documento **no** redefine el modelo: lo completa. Si alguna
-decisión contradice un documento normativo, gana el documento normativo.
+(`docs/*.md` y los contratos internos de trabajo) define el modelo pero no
+fija valores o detalles concretos. Este documento **no** redefine el modelo:
+lo completa. Si alguna decisión contradice un documento normativo, gana el
+documento normativo.
+
+> Nota: las referencias a `AGENTS.md`/`AGENTS-STRICT.md` apuntan a los
+> contratos internos para agentes de codificación con IA, que viven en el
+> working tree local y **no se publican** en este repositorio. Las reglas de
+> producto que imponen están reflejadas públicamente en `README.md`,
+> `docs/product-vision.md` y el resto de documentos de `docs/`.
 
 ## 1. Baseline
 

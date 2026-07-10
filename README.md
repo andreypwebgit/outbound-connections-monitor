@@ -95,7 +95,7 @@ Aunque OCM ya ofrece capacidades tácticas potentes, estas son algunas rutas par
 ### 4. Comparativa entre Escaneos y Gestión del Baseline
 *   **Diff entre scans:** señalar qué conexiones, binarios y estados de baseline son nuevos respecto al escaneo anterior — el corazón del flujo de vigilancia manual (previsto para v0.5).
 *   **Vista de gestión del baseline:** listar todos los binarios conocidos con su estado y permitir revocar validaciones manuales.
-*   *Nota de diseño:* el "modo residente" (tray/ETW) que se contempló en versiones anteriores de este roadmap queda **descartado por diseño**: OCM es una herramienta de escaneo manual y no debe convertirse en daemon ni EDR (decisión cerrada en `AGENTS.md`).
+*   *Nota de diseño:* el "modo residente" (tray/ETW) que se contempló en versiones anteriores de este roadmap queda **descartado por diseño**: OCM es una herramienta de escaneo manual y no debe convertirse en daemon ni EDR (decisión cerrada del proyecto; ver [docs/product-vision.md](docs/product-vision.md)).
 
 ### 5. Automatización del Build en CI
 *   ✅ **Hecho en v0.4.1** — cada push a `main` ejecuta la suite completa de tests en GitHub Actions, y cada tag `v*` compila los instaladores y publica la release con checksums automáticamente (ver [docs/build-and-distribution.md](docs/build-and-distribution.md)).
