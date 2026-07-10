@@ -6,7 +6,9 @@ use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::core::errors::AppError;
-use crate::core::models::{BaselineInfo, ScanHistoryEntry, ScanNowResponse, TrustInfo};
+use crate::core::models::{
+    BaselineInfo, BaselineListEntry, ScanHistoryEntry, ScanNowResponse, TrustInfo,
+};
 
 /// Contador para generar IDs únicos sin dependencia de uuid.
 static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -46,7 +48,9 @@ pub struct Storage {
 impl Storage {
     pub fn new(db_path: PathBuf) -> Result<Self, AppError> {
         let conn = Connection::open(&db_path)?;
-        let storage = Self { conn: Mutex::new(conn) };
+        let storage = Self {
+            conn: Mutex::new(conn),
+        };
         storage.init_schema()?;
         Ok(storage)
     }
@@ -54,7 +58,9 @@ impl Storage {
     /// Base de datos en memoria para tests de integración.
     pub fn new_in_memory() -> Result<Self, AppError> {
         let conn = Connection::open_in_memory()?;
-        let storage = Self { conn: Mutex::new(conn) };
+        let storage = Self {
+            conn: Mutex::new(conn),
+        };
         storage.init_schema()?;
         Ok(storage)
     }
@@ -189,10 +195,22 @@ impl Storage {
         conn.execute_batch(schema)?;
 
         // Migraciones v0.3 (ignoramos errores si las columnas ya existen)
-        let _ = conn.execute("ALTER TABLE network_observations ADD COLUMN ppid INTEGER", params![]);
-        let _ = conn.execute("ALTER TABLE network_observations ADD COLUMN parent_name TEXT", params![]);
-        let _ = conn.execute("ALTER TABLE network_observations ADD COLUMN command_line TEXT", params![]);
-        let _ = conn.execute("ALTER TABLE network_observations ADD COLUMN user_context TEXT", params![]);
+        let _ = conn.execute(
+            "ALTER TABLE network_observations ADD COLUMN ppid INTEGER",
+            params![],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE network_observations ADD COLUMN parent_name TEXT",
+            params![],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE network_observations ADD COLUMN command_line TEXT",
+            params![],
+        );
+        let _ = conn.execute(
+            "ALTER TABLE network_observations ADD COLUMN user_context TEXT",
+            params![],
+        );
 
         // Migraciones v0.4:
         // - scans.raw_json: respuesta completa del scan para reproducibilidad
@@ -200,7 +218,10 @@ impl Storage {
         // - affinity_profiles.hostname: el modelo de afinidad usa hostname/FQDN
         //   como señal fuerte además del root_domain.
         let _ = conn.execute("ALTER TABLE scans ADD COLUMN raw_json TEXT", params![]);
-        let _ = conn.execute("ALTER TABLE affinity_profiles ADD COLUMN hostname TEXT", params![]);
+        let _ = conn.execute(
+            "ALTER TABLE affinity_profiles ADD COLUMN hostname TEXT",
+            params![],
+        );
 
         // Corrección de datos v0.4 (idempotente): la lógica anterior usaba
         // Observed_Local como "visto varias veces", pero según el lifecycle
@@ -243,7 +264,10 @@ impl Storage {
 
     /// Fallback de búsqueda por ruta normalizada cuando no hay file_id
     /// disponible (p. ej. archivo sin permisos de apertura).
-    pub fn find_identity_by_path(&self, normalized_path: &str) -> Result<Option<StoredIdentity>, AppError> {
+    pub fn find_identity_by_path(
+        &self,
+        normalized_path: &str,
+    ) -> Result<Option<StoredIdentity>, AppError> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT sha256, normalized_path, volume_serial, file_id, file_size, last_write_time
@@ -386,7 +410,11 @@ impl Storage {
 
     /// Escribe el estado de baseline calculado por el BaselineManager.
     /// La lógica de transiciones NO vive aquí: storage solo persiste.
-    pub fn write_baseline_entry(&self, binary_id: &str, info: &BaselineInfo) -> Result<(), AppError> {
+    pub fn write_baseline_entry(
+        &self,
+        binary_id: &str,
+        info: &BaselineInfo,
+    ) -> Result<(), AppError> {
         let conn = self.conn.lock().unwrap();
         Self::ensure_binary_row(&conn, binary_id)?;
         conn.execute(
@@ -411,6 +439,57 @@ impl Storage {
             ],
         )?;
         Ok(())
+    }
+
+    /// Proyección de lectura para la vista de gestión. La mutación de estados
+    /// sigue pasando exclusivamente por `BaselineManager`.
+    pub fn get_baseline_entries(&self) -> Result<Vec<BaselineListEntry>, AppError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT b.binary_id, i.normalized_path, b.state, b.seen_count,
+                    b.distinct_days, b.first_seen, b.last_seen, b.manual_validation,
+                    t.signature_status, t.signer_subject,
+                    (SELECT md.decision_type FROM manual_decisions md
+                     WHERE md.binary_id = b.binary_id
+                     ORDER BY md.created_at DESC, md.rowid DESC LIMIT 1),
+                    (SELECT md.created_at FROM manual_decisions md
+                     WHERE md.binary_id = b.binary_id
+                     ORDER BY md.created_at DESC, md.rowid DESC LIMIT 1)
+             FROM baseline_entries b
+             JOIN binary_identity i ON i.binary_id = b.binary_id
+             LEFT JOIN trust_records t ON t.trust_id = 'TRST-' || b.binary_id
+             ORDER BY
+                CASE b.state
+                    WHEN 'Potentially_Dangerous' THEN 0
+                    WHEN 'Revalidation_Required' THEN 1
+                    WHEN 'Unknown' THEN 2
+                    WHEN 'Candidate' THEN 3
+                    WHEN 'Observed_Local' THEN 4
+                    WHEN 'Baseline_Provisional' THEN 5
+                    WHEN 'Baseline_Consolidated' THEN 6
+                    ELSE 7
+                END,
+                b.last_seen DESC",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(BaselineListEntry {
+                sha256: row.get(0)?,
+                normalized_path: row.get(1)?,
+                state: row.get(2)?,
+                seen_count: row.get::<_, Option<u32>>(3)?.unwrap_or(0),
+                distinct_days: row.get::<_, Option<u32>>(4)?.unwrap_or(0),
+                first_seen: row.get(5)?,
+                last_seen: row.get(6)?,
+                manual_validation: row.get::<_, Option<i32>>(7)?.unwrap_or(0) != 0,
+                signature_status: row.get(8)?,
+                signer_subject: row.get(9)?,
+                last_manual_decision: row.get(10)?,
+                last_manual_decision_at: row.get(11)?,
+            })
+        })?;
+
+        rows.collect::<Result<Vec<_>, _>>().map_err(AppError::from)
     }
 
     // ------------------------------------------------------------------
@@ -533,8 +612,9 @@ impl Storage {
     // ------------------------------------------------------------------
 
     pub fn save_scan_results(&self, response: &ScanNowResponse) -> Result<(), AppError> {
-        let raw_json = serde_json::to_string(response)
-            .map_err(|e| AppError::SystemError(format!("Failed to serialize scan for persistence: {}", e)))?;
+        let raw_json = serde_json::to_string(response).map_err(|e| {
+            AppError::SystemError(format!("Failed to serialize scan for persistence: {}", e))
+        })?;
 
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction()?;
@@ -645,10 +725,43 @@ impl Storage {
         match raw.flatten() {
             Some(json) => {
                 let response = serde_json::from_str(&json).map_err(|e| {
-                    AppError::SystemError(format!("Persisted scan {} is not deserializable: {}", scan_id, e))
+                    AppError::SystemError(format!(
+                        "Persisted scan {} is not deserializable: {}",
+                        scan_id, e
+                    ))
                 })?;
                 Ok(Some(response))
             }
+            None => Ok(None),
+        }
+    }
+
+    /// Recupera el scan cronológicamente anterior al indicado. La comparativa
+    /// se basa en snapshots persistidos, no en el baseline mutable actual.
+    pub fn get_previous_scan_response(
+        &self,
+        scan_id: &str,
+    ) -> Result<Option<ScanNowResponse>, AppError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT raw_json
+             FROM scans
+             WHERE started_at < (SELECT started_at FROM scans WHERE scan_id = ?1)
+               AND raw_json IS NOT NULL
+             ORDER BY started_at DESC
+             LIMIT 1",
+        )?;
+        let raw = stmt
+            .query_row(params![scan_id], |row| row.get::<_, String>(0))
+            .optional()?;
+
+        match raw {
+            Some(json) => serde_json::from_str(&json).map(Some).map_err(|error| {
+                AppError::SystemError(format!(
+                    "Previous scan for {} is not deserializable: {}",
+                    scan_id, error
+                ))
+            }),
             None => Ok(None),
         }
     }

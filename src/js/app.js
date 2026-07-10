@@ -1,7 +1,7 @@
 // Orquestador de la UI: wiring de eventos y coordinación entre api, state y render.
 
 import * as api from './api.js';
-import { state, setScan, toggleFilter, applyBaselineToFindings } from './state.js';
+import { state, setScan, setComparison, toggleFilter, applyBaselineToFindings } from './state.js';
 import { renderSummary } from './render/summary.js';
 import { renderFindingsSection, renderFindingsList } from './render/findings.js';
 import { escapeHtml, formatDate } from './render/html.js';
@@ -12,6 +12,7 @@ let lastLiveScan = null;
 document.addEventListener('DOMContentLoaded', async () => {
   const scanBtn = document.getElementById('scan-btn');
   const historyBtn = document.getElementById('history-btn');
+  const baselineBtn = document.getElementById('baseline-btn');
   const appContent = document.getElementById('app-content');
 
   await api.onScanProgress((message) => {
@@ -23,6 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   scanBtn?.addEventListener('click', () => runScan(appContent));
   historyBtn?.addEventListener('click', () => showHistory(appContent));
+  baselineBtn?.addEventListener('click', () => showBaseline(appContent));
 
   // Enlaces externos (footer): target="_blank" no abre el navegador por
   // defecto dentro de la webview, así que se delega al backend.
@@ -63,6 +65,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       case 'manual-decision': {
         handleManualDecision(target.dataset.sha, target.dataset.decision, target);
+        break;
+      }
+      case 'baseline-decision': {
+        handleBaselineDecision(appContent, target.dataset.sha, target.dataset.decision, target);
         break;
       }
       case 'load-scan': {
@@ -107,6 +113,7 @@ async function runScan(appContent) {
     const result = await api.scanNow();
     lastLiveScan = result;
     setScan(result, { historical: false });
+    await loadComparison(result.scan_id);
     renderDashboard(appContent);
   } catch (error) {
     appContent.innerHTML = `<div class="text-center py-12 text-red-500"><p>Error durante el escaneo: ${escapeHtml(error)}</p></div>`;
@@ -122,7 +129,7 @@ function renderDashboard(appContent) {
   }
 
   appContent.innerHTML = `
-    ${renderSummary(scan, state.isHistorical)}
+    ${renderSummary(scan, state.isHistorical, state.currentComparison)}
     <div id="findings-section">${renderFindingsSection()}</div>`;
   renderFindingsList();
 }
@@ -197,9 +204,97 @@ async function loadHistoricalScan(appContent, scanId) {
   try {
     const scan = await api.getScan(scanId);
     setScan(scan, { historical: true });
+    await loadComparison(scan.scan_id);
     renderDashboard(appContent);
   } catch (error) {
     appContent.innerHTML = `<div class="text-center py-12 text-red-500"><p>Error cargando el escaneo: ${escapeHtml(error)}</p></div>`;
+  }
+}
+
+const BASELINE_STATE_STYLES = {
+  Unknown: 'border-gray-600 bg-gray-800 text-gray-300',
+  Candidate: 'border-blue-800 bg-blue-950 text-blue-300',
+  Observed_Local: 'border-cyan-800 bg-cyan-950 text-cyan-300',
+  Baseline_Provisional: 'border-green-800 bg-green-950 text-green-300',
+  Baseline_Consolidated: 'border-emerald-700 bg-emerald-950 text-emerald-300',
+  Revalidation_Required: 'border-orange-700 bg-orange-950 text-orange-300',
+  Potentially_Dangerous: 'border-red-700 bg-red-950 text-red-300',
+};
+
+function baselineAction(entry) {
+  if (entry.state === 'Candidate') {
+    return ['validate_local', 'Validar localmente', 'border-blue-700 text-blue-300 hover:bg-blue-950'];
+  }
+  if (entry.state === 'Observed_Local') {
+    return ['revoke_local_validation', 'Revocar validación', 'border-cyan-700 text-cyan-300 hover:bg-cyan-950'];
+  }
+  if (entry.state === 'Revalidation_Required' || entry.state === 'Potentially_Dangerous') {
+    return ['revalidate_accept', 'Aceptar revalidación', 'border-orange-700 text-orange-300 hover:bg-orange-950'];
+  }
+  return null;
+}
+
+async function showBaseline(appContent) {
+  appContent.innerHTML = '<div class="text-center py-12 text-gray-500"><p>Cargando baseline...</p></div>';
+
+  let entries;
+  try {
+    entries = await api.getBaselineEntries();
+  } catch (error) {
+    appContent.innerHTML = `<div class="text-center py-12 text-red-500"><p>Error cargando el baseline: ${escapeHtml(error)}</p></div>`;
+    return;
+  }
+
+  const rows = entries.map((entry) => {
+    const action = baselineAction(entry);
+    const actionButton = action
+      ? `<button data-action="baseline-decision" data-sha="${escapeHtml(entry.sha256)}" data-decision="${action[0]}"
+                 class="px-2 py-1 rounded border ${action[2]} transition-colors text-xs">${action[1]}</button>`
+      : '<span class="text-xs text-gray-600">Sin acción manual</span>';
+    const stateStyle = BASELINE_STATE_STYLES[entry.state] || 'border-gray-600 bg-gray-800 text-gray-300';
+    const validation = entry.manual_validation
+      ? '<span class="text-cyan-300">Manual activa</span>'
+      : '<span class="text-gray-500">Sin validación manual</span>';
+
+    return `<article class="border border-gray-700 rounded-lg p-4 flex justify-between items-start gap-5 hover:bg-gray-700">
+      <div class="min-w-0 flex-1">
+        <p class="text-xs text-gray-300 break-all">${escapeHtml(entry.normalized_path) || 'Ruta no disponible'}</p>
+        <p class="font-mono text-[10px] text-gray-600 break-all mt-1">${escapeHtml(entry.sha256)}</p>
+        ${entry.signer_subject ? `<p class="text-[10px] text-gray-500 mt-1">${escapeHtml(entry.signer_subject)}</p>` : ''}
+      </div>
+      <div class="w-60 shrink-0 text-right">
+        <div class="flex justify-end items-center gap-2 flex-wrap">
+          <span class="inline-block px-2 py-1 rounded border text-[10px] ${stateStyle}">${escapeHtml(entry.state)}</span>
+          <span class="font-mono text-xs text-gray-300">${entry.seen_count}<span class="text-gray-600"> vistos / ${entry.distinct_days}d</span></span>
+        </div>
+        <p class="text-xs mt-2">${validation} <span class="text-gray-600">· ${escapeHtml(entry.last_manual_decision) || 'sin decisión'}</span></p>
+        <p class="text-[10px] text-gray-500 mt-1">Último visto: ${formatDate(entry.last_seen)}</p>
+        <div class="mt-3">${actionButton}</div>
+      </div>
+    </article>`;
+  }).join('');
+
+  appContent.innerHTML = `<div class="bg-gray-800 border border-gray-700 rounded-lg p-6 shadow-sm">
+    <div class="flex justify-between items-start gap-4 mb-4">
+      <div>
+        <h2 class="text-lg font-semibold">Gestión del baseline</h2>
+        <p class="text-xs text-gray-500 mt-1">Las acciones disponibles son transiciones cerradas del lifecycle; no se permite editar estados libremente.</p>
+      </div>
+      <span class="text-xs text-gray-500">${entries.length} binario(s)</span>
+    </div>
+    ${entries.length === 0
+      ? '<div class="text-center py-8 text-gray-500 border border-dashed border-gray-700 rounded-lg">El baseline todavía está vacío.</div>'
+      : `<div class="space-y-3">${rows}</div>`}
+  </div>`;
+}
+
+async function loadComparison(scanId) {
+  try {
+    setComparison(await api.getScanComparison(scanId));
+  } catch (error) {
+    // La comparativa es una capa de consulta: un fallo no oculta el scan.
+    console.error('getScanComparison:', error);
+    setComparison(null);
   }
 }
 
@@ -231,6 +326,19 @@ async function handleManualDecision(sha256, decisionType, button) {
     // estado aplicará en el próximo escaneo.
     applyBaselineToFindings(sha256, baseline);
     renderFindingsList();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = 'Error — reintentar';
+    button.title = String(error);
+  }
+}
+
+async function handleBaselineDecision(appContent, sha256, decisionType, button) {
+  button.disabled = true;
+  button.textContent = 'Aplicando...';
+  try {
+    await api.recordManualDecision(sha256, decisionType);
+    await showBaseline(appContent);
   } catch (error) {
     button.disabled = false;
     button.textContent = 'Error — reintentar';

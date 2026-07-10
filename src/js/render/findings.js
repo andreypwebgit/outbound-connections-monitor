@@ -1,4 +1,4 @@
-import { state, getBandCategory, visibleFindings } from '../state.js';
+import { state, comparisonForFinding, getBandCategory, visibleFindings } from '../state.js';
 import { escapeHtml } from './html.js';
 import { renderDetail } from './detail.js';
 
@@ -73,6 +73,16 @@ function renderFindingRow(finding, index) {
   const rowId = `row-${index}`;
   const category = getBandCategory(finding.risk.band);
   const riskColor = FILTER_STYLES[category].row;
+  const comparison = comparisonForFinding(finding.finding_id);
+  const newBadge = comparison?.is_new_connection || comparison?.is_new_binary
+    ? '<span class="ml-2 px-1.5 py-0.5 bg-blue-950 text-blue-300 text-[10px] font-bold rounded border border-blue-700">NUEVO</span>'
+    : '';
+  const changedBadge = comparison?.connection_changed || comparison?.previous_baseline_state
+    ? '<span class="ml-2 px-1.5 py-0.5 bg-purple-950 text-purple-300 text-[10px] font-bold rounded border border-purple-700">CAMBIO</span>'
+    : '';
+  const baselineChange = comparison?.previous_baseline_state
+    ? `<span class="block text-[10px] text-orange-300">${escapeHtml(comparison.previous_baseline_state)} &rarr; ${escapeHtml(finding.baseline.state)}</span>`
+    : '';
 
   const servicesBadge =
     finding.process.services && finding.process.services.length > 0
@@ -90,6 +100,8 @@ function renderFindingRow(finding, index) {
             <span class="font-bold">${escapeHtml(finding.process.name)}</span>
             <span class="text-gray-500 ml-2">PID: ${finding.process.pid}</span>
             ${servicesBadge}
+            ${newBadge}
+            ${changedBadge}
           </div>
           <div class="text-xs text-gray-400">${escapeHtml(finding.protocol)} ${escapeHtml(finding.local.ip)}:${finding.local.port} &rarr; ${escapeHtml(finding.remote.ip)}:${finding.remote.port} ${hostname}</div>
         </div>
@@ -99,6 +111,7 @@ function renderFindingRow(finding, index) {
             ${escapeHtml(finding.baseline.state)} · afinidad ${escapeHtml(finding.affinity.level)}
             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-1 opacity-50"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </div>
+          ${baselineChange}
         </div>
       </div>
       ${renderDetail(finding, rowId)}

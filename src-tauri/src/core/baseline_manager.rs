@@ -84,7 +84,15 @@ impl BaselineManager {
 
         let info = match existing {
             None => Self::create_entry(sha256, previous_was_known, now),
-            Some(entry) => Self::update_entry(sha256, entry, observation, previous_was_known, storage, scan_id, now),
+            Some(entry) => Self::update_entry(
+                sha256,
+                entry,
+                observation,
+                previous_was_known,
+                storage,
+                scan_id,
+                now,
+            ),
         };
 
         if let Err(e) = storage.write_baseline_entry(sha256, &info) {
@@ -98,6 +106,7 @@ impl BaselineManager {
     ///
     /// Tipos soportados:
     /// - `validate_local`: `Candidate -> Observed_Local` (lifecycle).
+    /// - `revoke_local_validation`: `Observed_Local -> Candidate`.
     /// - `revalidate_accept`: `Revalidation_Required|Potentially_Dangerous ->
     ///   Candidate` para que el elemento vuelva a aprenderse tras revisión
     ///   humana (decisión documentada en docs/implementation-notes.md).
@@ -125,7 +134,8 @@ impl BaselineManager {
 
         let (target, manual_validation) = match decision_type {
             "validate_local" => (BaselineState::ObservedLocal, true),
-            "revalidate_accept" => (BaselineState::Candidate, entry.manual_validation),
+            "revoke_local_validation" => (BaselineState::Candidate, false),
+            "revalidate_accept" => (BaselineState::Candidate, false),
             other => return Err(format!("Unsupported manual decision type '{}'", other)),
         };
 
@@ -228,7 +238,11 @@ impl BaselineManager {
                 ..entry
             };
             if let Err(e) = storage.write_baseline_entry(previous, &updated) {
-                log::warn!("baseline: failed to push revalidation on {}: {}", previous, e);
+                log::warn!(
+                    "baseline: failed to push revalidation on {}: {}",
+                    previous,
+                    e
+                );
                 return false;
             }
             let _ = storage.record_audit_event(
@@ -295,12 +309,11 @@ impl BaselineManager {
 
         // Un rollback a un hash previamente visto también es cambio relevante:
         // si esta identidad estaba consolidada, se revalida.
-        let next;
-        if previous_was_known
+        let next = if previous_was_known
             && observation.hash_changed
             && current.is_valid_automatic_transition(BaselineState::RevalidationRequired)
         {
-            next = BaselineState::RevalidationRequired;
+            BaselineState::RevalidationRequired
         } else {
             // Señales cualitativas para promoción prudente:
             // trust válido, ruta normal y afinidad media/alta.
@@ -311,8 +324,10 @@ impl BaselineManager {
                     AffinityLevel::High | AffinityLevel::Medium
                 );
 
-            next = match current {
-                BaselineState::Unknown if seen_count >= CANDIDATE_MIN_SEEN => BaselineState::Candidate,
+            match current {
+                BaselineState::Unknown if seen_count >= CANDIDATE_MIN_SEEN => {
+                    BaselineState::Candidate
+                }
                 BaselineState::Candidate
                     if quality_ok
                         && seen_count >= PROVISIONAL_MIN_SEEN
@@ -328,8 +343,8 @@ impl BaselineManager {
                     BaselineState::BaselineConsolidated
                 }
                 other => other,
-            };
-        }
+            }
+        };
 
         if next != current {
             debug_assert!(current.is_valid_automatic_transition(next));
@@ -432,7 +447,12 @@ mod tests {
             manual_validation: false,
         };
         for day in 0..20 {
-            last = BaselineManager::evaluate_at(&obs(&sha), &storage, None, start + Duration::days(day));
+            last = BaselineManager::evaluate_at(
+                &obs(&sha),
+                &storage,
+                None,
+                start + Duration::days(day),
+            );
         }
 
         assert_eq!(last.state, "Baseline_Consolidated");
@@ -497,7 +517,12 @@ mod tests {
 
         // Consolidamos la identidad antigua.
         for day in 0..20 {
-            BaselineManager::evaluate_at(&obs(&old_sha), &storage, None, start + Duration::days(day));
+            BaselineManager::evaluate_at(
+                &obs(&old_sha),
+                &storage,
+                None,
+                start + Duration::days(day),
+            );
         }
         assert_eq!(
             storage.get_baseline_entry(&old_sha).unwrap().unwrap().state,
@@ -535,7 +560,10 @@ mod tests {
         let info = BaselineManager::evaluate_at(&o, &storage, None, now);
 
         assert_eq!(info.state, "Unknown");
-        assert_eq!(storage.get_baseline_entry(&old_sha).unwrap().unwrap().state, "Unknown");
+        assert_eq!(
+            storage.get_baseline_entry(&old_sha).unwrap().unwrap().state,
+            "Unknown"
+        );
     }
 
     #[test]
@@ -597,9 +625,13 @@ mod tests {
 
         BaselineManager::evaluate_at(&obs(&sha), &storage, None, now);
         BaselineManager::evaluate_at(&obs(&sha), &storage, None, now);
-        assert_eq!(storage.get_baseline_entry(&sha).unwrap().unwrap().state, "Candidate");
+        assert_eq!(
+            storage.get_baseline_entry(&sha).unwrap().unwrap().state,
+            "Candidate"
+        );
 
-        let updated = BaselineManager::apply_manual_decision(&sha, "validate_local", &storage).unwrap();
+        let updated =
+            BaselineManager::apply_manual_decision(&sha, "validate_local", &storage).unwrap();
         assert_eq!(updated.state, "Observed_Local");
         assert!(updated.manual_validation);
     }
@@ -611,7 +643,27 @@ mod tests {
         BaselineManager::evaluate(&obs(&sha), &storage, None);
 
         let result = BaselineManager::apply_manual_decision(&sha, "validate_local", &storage);
-        assert!(result.is_err(), "Unknown -> Observed_Local is not a valid transition");
+        assert!(
+            result.is_err(),
+            "Unknown -> Observed_Local is not a valid transition"
+        );
+    }
+
+    #[test]
+    fn manual_validation_can_be_revoked_back_to_candidate() {
+        let storage = Storage::new_in_memory().unwrap();
+        let sha = "ef".repeat(32);
+        let now = Utc::now();
+
+        BaselineManager::evaluate_at(&obs(&sha), &storage, None, now);
+        BaselineManager::evaluate_at(&obs(&sha), &storage, None, now);
+        BaselineManager::apply_manual_decision(&sha, "validate_local", &storage).unwrap();
+
+        let updated =
+            BaselineManager::apply_manual_decision(&sha, "revoke_local_validation", &storage)
+                .unwrap();
+        assert_eq!(updated.state, "Candidate");
+        assert!(!updated.manual_validation);
     }
 
     #[test]
@@ -656,7 +708,8 @@ mod tests {
         assert_eq!(info.state, "Revalidation_Required");
 
         // La decisión manual sí.
-        let updated = BaselineManager::apply_manual_decision(&sha, "revalidate_accept", &storage).unwrap();
+        let updated =
+            BaselineManager::apply_manual_decision(&sha, "revalidate_accept", &storage).unwrap();
         assert_eq!(updated.state, "Candidate");
     }
 }

@@ -166,6 +166,46 @@ pub struct ScanHistoryEntry {
     pub danger_count: u32,
 }
 
+/// Comparativa de consulta entre un scan persistido y su predecesor. No
+/// forma parte del contrato `scan_now`.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ScanComparison {
+    pub scan_id: String,
+    pub previous_scan_id: Option<String>,
+    pub new_connections_count: u32,
+    pub changed_connections_count: u32,
+    pub new_binaries_count: u32,
+    pub baseline_changes_count: u32,
+    pub findings: Vec<FindingComparison>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FindingComparison {
+    pub finding_id: String,
+    pub is_new_connection: bool,
+    pub connection_changed: bool,
+    pub is_new_binary: bool,
+    pub previous_baseline_state: Option<String>,
+}
+
+/// Fila de la vista de gestión del baseline. Es una proyección de consulta,
+/// no un nuevo estado de dominio ni una extensión de `scan_now`.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BaselineListEntry {
+    pub sha256: String,
+    pub normalized_path: Option<String>,
+    pub state: String,
+    pub seen_count: u32,
+    pub distinct_days: u32,
+    pub first_seen: Option<String>,
+    pub last_seen: Option<String>,
+    pub manual_validation: bool,
+    pub signature_status: Option<String>,
+    pub signer_subject: Option<String>,
+    pub last_manual_decision: Option<String>,
+    pub last_manual_decision_at: Option<String>,
+}
+
 // Internal Enums for Domain Logic
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BaselineState {
@@ -221,10 +261,22 @@ impl BaselineState {
             (self, next),
             (BaselineState::Unknown, BaselineState::Candidate)
                 | (BaselineState::Candidate, BaselineState::BaselineProvisional)
-                | (BaselineState::BaselineProvisional, BaselineState::BaselineConsolidated)
-                | (BaselineState::ObservedLocal, BaselineState::RevalidationRequired)
-                | (BaselineState::BaselineProvisional, BaselineState::RevalidationRequired)
-                | (BaselineState::BaselineConsolidated, BaselineState::RevalidationRequired)
+                | (
+                    BaselineState::BaselineProvisional,
+                    BaselineState::BaselineConsolidated
+                )
+                | (
+                    BaselineState::ObservedLocal,
+                    BaselineState::RevalidationRequired
+                )
+                | (
+                    BaselineState::BaselineProvisional,
+                    BaselineState::RevalidationRequired
+                )
+                | (
+                    BaselineState::BaselineConsolidated,
+                    BaselineState::RevalidationRequired
+                )
         )
     }
 
@@ -240,8 +292,15 @@ impl BaselineState {
         matches!(
             (self, next),
             (BaselineState::Candidate, BaselineState::ObservedLocal)
-                | (BaselineState::RevalidationRequired, BaselineState::Candidate)
-                | (BaselineState::PotentiallyDangerous, BaselineState::Candidate)
+                | (BaselineState::ObservedLocal, BaselineState::Candidate)
+                | (
+                    BaselineState::RevalidationRequired,
+                    BaselineState::Candidate
+                )
+                | (
+                    BaselineState::PotentiallyDangerous,
+                    BaselineState::Candidate
+                )
         )
     }
 }

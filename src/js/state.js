@@ -3,6 +3,8 @@
 export const state = {
   /** Scan mostrado actualmente (ScanNowResponse) o null. */
   currentScan: null,
+  /** Comparativa de consulta del scan mostrado contra su predecesor. */
+  currentComparison: null,
   /** true si el scan mostrado se cargó desde el historial. */
   isHistorical: false,
   /** Último historial cargado (ScanHistoryEntry[]). */
@@ -29,7 +31,16 @@ export function getBandCategory(band) {
 
 export function setScan(scan, { historical = false } = {}) {
   state.currentScan = scan;
+  state.currentComparison = null;
   state.isHistorical = historical;
+}
+
+export function setComparison(comparison) {
+  state.currentComparison = comparison;
+}
+
+export function comparisonForFinding(findingId) {
+  return state.currentComparison?.findings?.find((item) => item.finding_id === findingId) || null;
 }
 
 export function toggleFilter(category) {

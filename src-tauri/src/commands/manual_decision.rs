@@ -9,6 +9,7 @@ use crate::core::storage::Storage;
 ///
 /// Tipos válidos (docs/baseline-lifecycle.md + docs/implementation-notes.md):
 /// - `validate_local`:   Candidate -> Observed_Local
+/// - `revoke_local_validation`: Observed_Local -> Candidate
 /// - `revalidate_accept`: Revalidation_Required | Potentially_Dangerous -> Candidate
 #[command]
 pub async fn record_manual_decision(
@@ -17,5 +18,10 @@ pub async fn record_manual_decision(
     notes: Option<String>,
     state: tauri::State<'_, Storage>,
 ) -> Result<BaselineInfo, String> {
-    BaselineManager::apply_manual_decision_with_notes(&sha256, &decision_type, notes.as_deref(), &state)
+    BaselineManager::apply_manual_decision_with_notes(
+        &sha256,
+        &decision_type,
+        notes.as_deref(),
+        &state,
+    )
 }

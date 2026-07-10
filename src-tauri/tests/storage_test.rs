@@ -15,7 +15,7 @@ fn minimal_response(scan_id: &str, started_at: &str) -> ScanNowResponse {
         host: HostInfo {
             platform: "windows".to_string(),
             hostname: "TEST-PC".to_string(),
-            app_version: "0.4.0".to_string(),
+            app_version: "0.5.0".to_string(),
         },
         summary: ScanSummary {
             total_observations: 1,
@@ -31,7 +31,10 @@ fn minimal_response(scan_id: &str, started_at: &str) -> ScanNowResponse {
             finding_id: format!("FND-{}-0", scan_id),
             protocol: "TCP".to_string(),
             state: "ESTABLISHED".to_string(),
-            local: LocalEndpoint { ip: "192.168.1.2".to_string(), port: 50000 },
+            local: LocalEndpoint {
+                ip: "192.168.1.2".to_string(),
+                port: 50000,
+            },
             remote: RemoteEndpoint {
                 ip: "1.1.1.1".to_string(),
                 port: 443,
@@ -135,7 +138,10 @@ fn scan_roundtrip_preserves_full_contract_payload() {
     assert_eq!(restored.scan_id, response.scan_id);
     assert_eq!(restored.findings.len(), 1);
     let f = &restored.findings[0];
-    assert_eq!(f.binary_identity.sha256, response.findings[0].binary_identity.sha256);
+    assert_eq!(
+        f.binary_identity.sha256,
+        response.findings[0].binary_identity.sha256
+    );
     assert_eq!(f.trust.signature_source, "catalog");
     assert_eq!(f.affinity.matched_signals, vec!["COMMON_PORT".to_string()]);
     assert_eq!(f.baseline.state, "Unknown");
@@ -252,4 +258,75 @@ fn manual_decisions_are_recorded_with_notes() {
         .unwrap();
     assert_eq!(decision_type, "validate_local");
     assert_eq!(notes.as_deref(), Some("herramienta interna de build"));
+}
+
+#[test]
+fn previous_scan_query_uses_persisted_chronology() {
+    let storage = Storage::new_in_memory().unwrap();
+    storage
+        .save_scan_results(&minimal_response("SCAN-1", "2026-07-08T09:00:00+00:00"))
+        .unwrap();
+    storage
+        .save_scan_results(&minimal_response("SCAN-2", "2026-07-09T09:00:00+00:00"))
+        .unwrap();
+    storage
+        .save_scan_results(&minimal_response("SCAN-3", "2026-07-10T09:00:00+00:00"))
+        .unwrap();
+
+    let previous = storage
+        .get_previous_scan_response("SCAN-3")
+        .unwrap()
+        .expect("previous scan");
+    assert_eq!(previous.scan_id, "SCAN-2");
+    assert!(storage
+        .get_previous_scan_response("SCAN-1")
+        .unwrap()
+        .is_none());
+}
+
+#[test]
+fn baseline_management_projection_exposes_counters_and_validation() {
+    let storage = Storage::new_in_memory().unwrap();
+    let sha = "a".repeat(64);
+    storage
+        .write_baseline_entry(
+            &sha,
+            &BaselineInfo {
+                state: "Observed_Local".to_string(),
+                seen_count: 7,
+                distinct_days: 3,
+                first_seen: Some("2026-07-01T09:00:00+00:00".to_string()),
+                last_seen: Some("2026-07-10T09:00:00+00:00".to_string()),
+                manual_validation: true,
+            },
+        )
+        .unwrap();
+    storage
+        .save_trust_record(
+            &sha,
+            &TrustInfo {
+                signature_status: "Valid".to_string(),
+                signature_source: "embedded".to_string(),
+                signer_subject: Some("CN=Test".to_string()),
+                signer_thumbprint: None,
+                chain_status: "Trusted".to_string(),
+            },
+        )
+        .unwrap();
+    storage
+        .record_manual_decision(&sha, "validate_local", None)
+        .unwrap();
+
+    let entries = storage.get_baseline_entries().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].sha256, sha);
+    assert_eq!(entries[0].state, "Observed_Local");
+    assert_eq!(entries[0].seen_count, 7);
+    assert_eq!(entries[0].distinct_days, 3);
+    assert!(entries[0].manual_validation);
+    assert_eq!(entries[0].signature_status.as_deref(), Some("Valid"));
+    assert_eq!(
+        entries[0].last_manual_decision.as_deref(),
+        Some("validate_local")
+    );
 }
