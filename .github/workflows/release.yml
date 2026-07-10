@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build installers & publish release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Run tests
+        working-directory: src-tauri
+        run: cargo test --locked
+
+      - name: Build installers (tauri build)
+        run: npx tauri build
+
+      - name: Generate SHA-256 checksums
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem src-tauri/target/release/bundle/msi/*.msi, src-tauri/target/release/bundle/nsis/*-setup.exe
+          $lines = foreach ($f in $files) {
+            "{0}  {1}" -f (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower(), $f.Name
+          }
+          $lines | Set-Content -Encoding utf8 checksums.txt
+          Get-Content checksums.txt
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## 🌐 [ocm.apwebai.es](https://ocm.apwebai.es/) — web oficial del proyecto
+
+            **Outbound Connections Monitor (OCM)**: escaneo manual de conexiones salientes en Windows con identidad SHA-256, firma Authenticode, linaje de procesos, baseline progresivo y afinidad de red. 100 % local.
+
+            ### 📦 Instalación
+
+            - `*-setup.exe` (NSIS) — recomendado para usuarios finales.
+            - `*.msi` (WiX) — despliegue corporativo (GPO/Intune).
+            - `checksums.txt` — SHA-256 de ambos instaladores.
+
+            Requisitos: Windows 10 o superior. Si falta el runtime WebView2, el instalador lo descarga automáticamente.
+
+            ### ℹ️ Nota sobre Windows SmartScreen
+
+            Los instaladores no están firmados con certificado de código: la primera vez Windows mostrará *"Windows protegió tu PC"*. Es el comportamiento normal de SmartScreen con software sin firma, no una detección de amenaza. Para continuar: **"Más información" → "Ejecutar de todas formas"**. Alternativa: [compilar desde el código fuente](https://github.com/andreypwebgit/outbound-connections-monitor/blob/main/docs/build-and-distribution.md).
+          files: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            checksums.txt

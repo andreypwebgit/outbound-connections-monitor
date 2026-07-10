@@ -275,3 +275,25 @@ de `CARGO_PKG_VERSION`; el hostname real sale de `COMPUTERNAME`.
   Sin esto, el binario instalado en Program Files moría al arrancar por
   intentar crear la DB en una ruta relativa no escribible.
 - Ver `docs/build-and-distribution.md` para artefactos, WebView2 y SmartScreen.
+
+## 13. v0.4.1
+
+- **CI/CD**: workflows de GitHub Actions (`ci.yml` tests en push/PR;
+  `release.yml` build + release automática en tags `v*` con checksums).
+  `cargo test --locked` exige `Cargo.lock` actualizado en cada bump.
+- **MITRE ATT&CK**: mapeo presentacional de reason codes a técnicas, solo en
+  la UI (`render/detail.js`) para no tocar el contrato `scan_now`
+  (`additionalProperties: false`). Referencia canónica del mapeo en
+  `docs/scoring-model.md`. Solo correspondencias rigurosas.
+- **Búsqueda en hallazgos**: filtro de texto en frontend
+  (proceso/ruta/IP/hostname/dominio/sha/puerto/estado/banda), combinable con
+  los filtros de categoría; al teclear solo se re-renderiza la lista para
+  conservar el foco del input.
+- **Roadmap del README**: el "modo residente (tray/ETW)" se retira
+  explícitamente por contradecir la decisión cerrada de AGENTS.md (la app es
+  de escaneo manual); su lugar lo ocupa la comparativa entre scans prevista
+  para v0.5.
+- **Enlaces externos de la UI**: los enlaces con `target="_blank"` no llegan
+  al navegador por defecto dentro de la webview de Tauri 2; el comando
+  `open_external` (rundll32 `url.dll,FileProtocolHandler`, URL validada, sin
+  shell) los abre y `app.js` intercepta el click.

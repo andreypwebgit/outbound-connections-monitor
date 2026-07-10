@@ -42,9 +42,14 @@ export function renderFindingsSection() {
     .join('');
 
   return `
-    <div class="flex justify-between items-center mb-3">
+    <div class="flex justify-between items-center mb-3 gap-3 flex-wrap">
       <h3 class="text-lg font-semibold">Hallazgos</h3>
-      <div class="flex gap-2 text-xs font-mono">${buttons}</div>
+      <div class="flex gap-2 items-center flex-wrap">
+        <input id="findings-search" type="search" value="${escapeHtml(state.searchQuery)}"
+               placeholder="Filtrar por proceso, IP, dominio, ruta…"
+               class="bg-gray-800 border border-gray-600 rounded px-3 py-1 text-xs text-gray-200 placeholder-gray-500 w-64 focus:outline-none focus:ring-1 focus:ring-blue-500">
+        <div class="flex gap-2 text-xs font-mono">${buttons}</div>
+      </div>
     </div>
     <div id="findings-container" class="space-y-3"></div>`;
 }
@@ -57,7 +62,7 @@ export function renderFindingsList() {
   const visible = visibleFindings();
   if (visible.length === 0) {
     container.innerHTML =
-      '<div class="text-center py-8 text-gray-500 border border-dashed border-gray-700 rounded-lg">No hay hallazgos que coincidan con los filtros actuales.</div>';
+      '<div class="text-center py-8 text-gray-500 border border-dashed border-gray-700 rounded-lg">No hay hallazgos que coincidan con los filtros o la búsqueda actuales.</div>';
     return;
   }
 

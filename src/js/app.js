@@ -33,6 +33,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     api.openExternal(link.href).catch((error) => console.error('openExternal:', error));
   });
 
+  // Búsqueda libre en hallazgos: re-render solo de la lista para que el
+  // input conserve el foco mientras se teclea.
+  appContent.addEventListener('input', (event) => {
+    if (event.target.id !== 'findings-search') return;
+    state.searchQuery = event.target.value;
+    renderFindingsList();
+  });
+
   // Delegación de eventos para todo el contenido dinámico.
   appContent.addEventListener('click', (event) => {
     const target = event.target.closest('[data-action]');

@@ -54,6 +54,72 @@ export function humanizeReason(code) {
   return REASON_LABELS[code] || code;
 }
 
+/**
+ * Mapeo de reason codes a técnicas MITRE ATT&CK.
+ * Solo se mapean correspondencias rigurosas; la referencia canónica del
+ * mapeo vive en docs/scoring-model.md. Es información presentacional:
+ * no forma parte del contrato scan_now.
+ */
+const MITRE_TECHNIQUES = {
+  SUSPICIOUS_COMMAND_LINE: [
+    { id: 'T1059', name: 'Command and Scripting Interpreter' },
+    { id: 'T1027', name: 'Obfuscated Files or Information' },
+  ],
+  OFFICE_SPAWNED_NETWORK_PROCESS: [
+    { id: 'T1566.001', name: 'Phishing: Spearphishing Attachment' },
+    { id: 'T1204.002', name: 'User Execution: Malicious File' },
+  ],
+  SCRIPT_SPAWNED_NETWORK_PROCESS: [
+    { id: 'T1059', name: 'Command and Scripting Interpreter' },
+  ],
+  USER_PROCESS_AS_SYSTEM: [{ id: 'T1036', name: 'Masquerading' }],
+  UNSIGNED_SYSTEM_PROCESS: [
+    { id: 'T1036.005', name: 'Masquerading: Match Legitimate Name or Location' },
+  ],
+  SYSTEM_PATH_BUT_NOT_MICROSOFT: [
+    { id: 'T1036.005', name: 'Masquerading: Match Legitimate Name or Location' },
+  ],
+  INVALID_SIGNATURE: [{ id: 'T1036.001', name: 'Masquerading: Invalid Code Signature' }],
+  ORPHANED_IMAGE: [{ id: 'T1070.004', name: 'Indicator Removal: File Deletion' }],
+  FILE_MISSING: [{ id: 'T1070.004', name: 'Indicator Removal: File Deletion' }],
+  SUSPICIOUS_PATH: [{ id: 'T1204.002', name: 'User Execution: Malicious File' }],
+};
+
+/** URL de una técnica/subtécnica en attack.mitre.org (T1036.005 -> T1036/005). */
+function mitreUrl(techniqueId) {
+  return `https://attack.mitre.org/techniques/${techniqueId.replace('.', '/')}/`;
+}
+
+/** Técnicas MITRE únicas asociadas a los reason codes de un finding. */
+export function mitreTechniquesFor(reasonCodes) {
+  const seen = new Map();
+  for (const code of reasonCodes || []) {
+    for (const technique of MITRE_TECHNIQUES[code] || []) {
+      if (!seen.has(technique.id)) {
+        seen.set(technique.id, technique);
+      }
+    }
+  }
+  return [...seen.values()];
+}
+
+function mitreBadges(reasonCodes) {
+  const techniques = mitreTechniquesFor(reasonCodes);
+  if (techniques.length === 0) return '';
+  const badges = techniques
+    .map(
+      (t) => `<a href="${mitreUrl(t.id)}" target="_blank" rel="noopener noreferrer"
+        class="inline-block px-1.5 py-0.5 m-0.5 rounded border text-[10px] border-purple-800 bg-purple-950 text-purple-300 hover:text-purple-100 transition-colors"
+        title="${escapeHtml(t.name)}">${escapeHtml(t.id)} · ${escapeHtml(t.name)}</a>`
+    )
+    .join('');
+  return `
+    <div class="mt-3 border-t border-gray-700 pt-2">
+      <h4 class="text-gray-500 text-xs uppercase mb-2">Técnicas MITRE ATT&amp;CK relacionadas</h4>
+      <div>${badges}</div>
+    </div>`;
+}
+
 function signalBadges(signals, positive) {
   if (!signals || signals.length === 0) return '<span class="text-gray-600">—</span>';
   const cls = positive
@@ -137,6 +203,7 @@ export function renderDetail(finding, rowId) {
           ${finding.risk.reason_codes.map((r) => `<li title="${escapeHtml(r)}">${escapeHtml(humanizeReason(r))}</li>`).join('') || '<li class="text-gray-500">Sin razones específicas</li>'}
         </ul>
         <p class="mt-2 text-xs text-gray-400">Acción recomendada: <span class="font-mono text-gray-300">${escapeHtml(finding.risk.recommended_action)}</span></p>
+        ${mitreBadges(finding.risk.reason_codes)}
         <div class="mt-3 border-t border-gray-700 pt-2">
           <h4 class="text-gray-500 text-xs uppercase mb-2">Afinidad de red (score: ${affinity.score} · ${escapeHtml(affinity.level)})</h4>
           <p class="mb-1 text-gray-300 break-all"><span class="text-gray-500 mr-2">Destino:</span>${escapeHtml(finding.remote.ip)}:${finding.remote.port}

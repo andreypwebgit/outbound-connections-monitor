@@ -3,6 +3,28 @@
 Cómo generar los artefactos de producción de OCM para Windows y cómo
 distribuirlos a equipos que no tienen herramientas de desarrollo.
 
+## Releases automáticas (CI)
+
+Desde v0.4.1 la vía recomendada es el pipeline de GitHub Actions:
+
+- **`.github/workflows/ci.yml`** — en cada push/PR a `main` compila el
+  proyecto y ejecuta la suite completa de tests en un runner Windows.
+- **`.github/workflows/release.yml`** — al empujar un tag `v*` ejecuta los
+  tests, compila los instaladores (`npx tauri build`), genera
+  `checksums.txt` (SHA-256) y **publica la release de GitHub** con los tres
+  archivos adjuntos y notas generadas a partir de los commits.
+
+Publicar una versión nueva se reduce a:
+
+```powershell
+# actualizar version en src-tauri/Cargo.toml y src-tauri/tauri.conf.json
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+El build local descrito a continuación sigue siendo válido para desarrollo
+y verificación manual.
+
 ## Requisitos (solo en la máquina que construye)
 
 - Windows 10/11

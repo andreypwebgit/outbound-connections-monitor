@@ -2,7 +2,8 @@
 
 [![Web Oficial](https://img.shields.io/badge/🌐_Web_Oficial-ocm.apwebai.es-2563eb?style=for-the-badge)](https://ocm.apwebai.es/)
 [![Licencia](https://img.shields.io/badge/Licencia-MIT-green?style=for-the-badge)](LICENSE)
-[![Descargas](https://img.shields.io/badge/Descargas-v0.4.0-orange?style=for-the-badge)](https://github.com/andreypwebgit/outbound-connections-monitor/releases/latest)
+[![Descargas](https://img.shields.io/github/v/release/andreypwebgit/outbound-connections-monitor?style=for-the-badge&label=Descargas&color=orange)](https://github.com/andreypwebgit/outbound-connections-monitor/releases/latest)
+[![CI](https://github.com/andreypwebgit/outbound-connections-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/andreypwebgit/outbound-connections-monitor/actions/workflows/ci.yml)
 
 **Web oficial: [https://ocm.apwebai.es/](https://ocm.apwebai.es/)** — información del proyecto, guía de uso y descargas.
 
@@ -43,7 +44,9 @@ El proyecto está diseñado bajo estrictos requerimientos de simplicidad operati
 *   **Inteligencia Heurística Avanzada:** El *Risk Engine* castiga procesos de red hijos de Office (`winword.exe`), scripts de sistema u ofuscación en línea de comandos (ej. `-enc`, `-bypass`), y bonifica firmas válidas, baseline consolidado y alta afinidad.
 *   **Excepciones de Sistema (Protected Processes):** Reconoce procesos fuertemente protegidos del Kernel (`System`, `MsMpEng.exe`) evitando falsos positivos al justificar por qué no se pueden obtener hashes o rutas de disco.
 *   **Auditoría técnica:** eventos internos (`scan_started`, transiciones de baseline, errores de hash/persistencia, exports) quedan registrados en `audit_events`.
-*   **Tests del dominio crítico:** 70 tests (contrato JSON, scoring, transiciones de baseline, afinidad, caché de identidad, clasificación de rutas e integración SQLite).
+*   **Filtro de búsqueda en hallazgos (v0.4.1):** filtrado instantáneo por proceso, IP, hostname, dominio, ruta o hash, combinable con los filtros de riesgo.
+*   **Mapeo MITRE ATT&CK (v0.4.1):** los reason codes con correspondencia rigurosa muestran sus técnicas (T1059, T1036.005, T1070.004…) enlazadas a attack.mitre.org.
+*   **Tests del dominio crítico:** 73 tests (contrato JSON, scoring, transiciones de baseline, afinidad, caché de identidad, clasificación de rutas e integración SQLite), ejecutados en CI en cada push.
 
 ---
 
@@ -83,17 +86,20 @@ Aunque OCM ya ofrece capacidades tácticas potentes, estas son algunas rutas par
 *   Sustituir llamadas indirectas por invocaciones a `IPHLPAPI.DLL`, `EnumProcesses` y verificaciones directas a la API criptográfica de Windows (`WinVerifyTrust`). Esto bajará el tiempo de ejecución a milisegundos e incrementará la resiliencia frente a malware que interfiere con binarios del sistema.
 
 ### 2. Integración de Threat Intelligence (IoCs)
-*   **APIs de Terceros:** Conectar IPs remotas y hashes extraños a bases de datos como **VirusTotal** y **AbuseIPDB** para verificar si una conexión pertenece a una *botnet* conocida.
-*   **Reglas YARA y MITRE ATT&CK:** Mapear los `reason_codes` generados por el *Risk Engine* a las tácticas y técnicas oficiales del framework MITRE ATT&CK para un reporte más estandarizado.
+*   **APIs de Terceros (opt-in):** Conectar IPs remotas y hashes extraños a bases de datos como **VirusTotal** y **AbuseIPDB** para verificar si una conexión pertenece a una *botnet* conocida. Será siempre **opcional y explícito**: el motor local funciona al 100 % sin red y esa garantía de privacidad se mantiene.
+*   ~~**MITRE ATT&CK:**~~ ✅ **Hecho en v0.4.1** — los `reason_codes` con correspondencia rigurosa muestran sus técnicas ATT&CK en la UI (mapeo documentado en [docs/scoring-model.md](docs/scoring-model.md)).
 
 ### 3. Diagnóstico Impulsado por IA
-*   **Modelos Locales / Cloud (LLM):** Enviar el snapshot forense recolectado (hash, ppid, cmdline) a un modelo de IA entrenado en ciberseguridad para obtener una explicación narrada del por qué un proceso podría ser malicioso o benigno, actuando como un segundo piloto de análisis.
+*   **Modelos Locales / Cloud (LLM):** Enviar el snapshot forense recolectado (hash, ppid, cmdline) a un modelo de IA entrenado en ciberseguridad para obtener una explicación narrada del por qué un proceso podría ser malicioso o benigno, actuando como un segundo piloto de análisis. Igual que el punto 2: solo como apoyo opcional para casos ambiguos.
 
-### 4. Modo Residente (EDR Agent)
-*   **Background / Tray App:** Permitir que la aplicación minimice a la bandeja del sistema y recolecte telemetría silenciosamente con `ETW` (Event Tracing for Windows) para capturar conexiones efímeras sin depender de un escaneo fotográfico manual.
+### 4. Comparativa entre Escaneos y Gestión del Baseline
+*   **Diff entre scans:** señalar qué conexiones, binarios y estados de baseline son nuevos respecto al escaneo anterior — el corazón del flujo de vigilancia manual (previsto para v0.5).
+*   **Vista de gestión del baseline:** listar todos los binarios conocidos con su estado y permitir revocar validaciones manuales.
+*   *Nota de diseño:* el "modo residente" (tray/ETW) que se contempló en versiones anteriores de este roadmap queda **descartado por diseño**: OCM es una herramienta de escaneo manual y no debe convertirse en daemon ni EDR (decisión cerrada en `AGENTS.md`).
 
 ### 5. Automatización del Build en CI
-*   Los instaladores `.msi` / `.exe` ya se generan localmente con `npx tauri build` (ver [docs/build-and-distribution.md](docs/build-and-distribution.md)). El siguiente paso es automatizarlo con GitHub Actions y añadir firma de código para eliminar el aviso de SmartScreen.
+*   ✅ **Hecho en v0.4.1** — cada push a `main` ejecuta la suite completa de tests en GitHub Actions, y cada tag `v*` compila los instaladores y publica la release con checksums automáticamente (ver [docs/build-and-distribution.md](docs/build-and-distribution.md)).
+*   Pendiente: **firma de código** de los instaladores para eliminar el aviso de SmartScreen (requiere certificado).
 
 ---
 

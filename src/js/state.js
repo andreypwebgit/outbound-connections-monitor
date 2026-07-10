@@ -14,6 +14,8 @@ export const state = {
     danger: true,
     unknown: true,
   },
+  /** Texto de búsqueda libre sobre los hallazgos. */
+  searchQuery: '',
 };
 
 /** Mapea una banda de riesgo del contrato a la categoría visual de la UI. */
@@ -36,12 +38,34 @@ export function toggleFilter(category) {
   }
 }
 
-/** Findings visibles según los filtros activos, con su índice original. */
+/** `true` si el finding coincide con el texto de búsqueda libre. */
+function matchesSearch(finding, query) {
+  if (!query) return true;
+  const haystack = [
+    finding.process.name,
+    finding.process.path,
+    finding.remote.ip,
+    finding.remote.hostname,
+    finding.remote.root_domain,
+    finding.binary_identity.sha256,
+    String(finding.remote.port),
+    finding.baseline.state,
+    finding.risk.band,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
+/** Findings visibles según filtros de categoría y búsqueda, con su índice original. */
 export function visibleFindings() {
   if (!state.currentScan || !Array.isArray(state.currentScan.findings)) return [];
+  const query = state.searchQuery.trim().toLowerCase();
   return state.currentScan.findings
     .map((finding, index) => ({ finding, index }))
-    .filter(({ finding }) => state.filters[getBandCategory(finding.risk.band)]);
+    .filter(({ finding }) => state.filters[getBandCategory(finding.risk.band)])
+    .filter(({ finding }) => matchesSearch(finding, query));
 }
 
 /**

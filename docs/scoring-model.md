@@ -91,6 +91,29 @@ Escala sugerida de 0 a 100:
 - el riesgo no puede depender únicamente de Intel externo;
 - un proceso huérfano debe elevarse a hallazgo crítico.
 
+## Mapeo a MITRE ATT&CK (presentacional)
+
+Algunos reason codes se corresponden con técnicas de MITRE ATT&CK. El mapeo
+es **informativo/presentacional** (se muestra en la UI): no forma parte del
+contrato `scan_now` ni altera el score. Solo se mapean correspondencias
+rigurosas; un reason code sin correspondencia clara no se fuerza.
+
+| Reason code | Técnicas |
+|---|---|
+| `SUSPICIOUS_COMMAND_LINE` | T1059 (Command and Scripting Interpreter), T1027 (Obfuscated Files or Information) |
+| `OFFICE_SPAWNED_NETWORK_PROCESS` | T1566.001 (Spearphishing Attachment), T1204.002 (User Execution: Malicious File) |
+| `SCRIPT_SPAWNED_NETWORK_PROCESS` | T1059 (Command and Scripting Interpreter) |
+| `USER_PROCESS_AS_SYSTEM` | T1036 (Masquerading) |
+| `UNSIGNED_SYSTEM_PROCESS` | T1036.005 (Match Legitimate Name or Location) |
+| `SYSTEM_PATH_BUT_NOT_MICROSOFT` | T1036.005 (Match Legitimate Name or Location) |
+| `INVALID_SIGNATURE` | T1036.001 (Invalid Code Signature) |
+| `ORPHANED_IMAGE` | T1070.004 (Indicator Removal: File Deletion) |
+| `FILE_MISSING` | T1070.004 (Indicator Removal: File Deletion) |
+| `SUSPICIOUS_PATH` | T1204.002 (User Execution: Malicious File) |
+
+La implementación de referencia vive en `src/js/render/detail.js`
+(`MITRE_TECHNIQUES`); si se amplía el mapeo, actualizar ambos.
+
 ## Afinidad
 
 La afinidad alimenta el score, pero no lo sustituye.
