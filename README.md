@@ -88,3 +88,9 @@ Aunque OCM ya ofrece capacidades tácticas potentes, estas son algunas rutas par
 
 ### 5. Automatización del Build en CI
 *   Los instaladores `.msi` / `.exe` ya se generan localmente con `npx tauri build` (ver [docs/build-and-distribution.md](docs/build-and-distribution.md)). El siguiente paso es automatizarlo con GitHub Actions y añadir firma de código para eliminar el aviso de SmartScreen.
+
+---
+
+## 📄 Licencia
+
+Este proyecto se distribuye bajo la licencia [MIT](LICENSE).
