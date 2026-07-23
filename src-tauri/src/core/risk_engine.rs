@@ -19,6 +19,93 @@ pub struct RiskContext<'a> {
 pub struct RiskEngine;
 
 impl RiskEngine {
+    fn has_suspicious_command_line(process_name: &str, command_line: &str) -> bool {
+        let tokens: Vec<String> = command_line
+            .split_whitespace()
+            .map(Self::normalize_command_token)
+            .filter(|token| !token.is_empty())
+            .collect();
+
+        let powershell_context = Self::is_powershell_executable(process_name)
+            || tokens
+                .iter()
+                .any(|token| Self::is_powershell_executable(token));
+        if !powershell_context {
+            return false;
+        }
+
+        let suspicious_switch = tokens.iter().any(|token| {
+            Self::is_option(
+                token,
+                &[
+                    "-enc",
+                    "-encodedcommand",
+                    "-nop",
+                    "-noprofile",
+                    "-noni",
+                    "-noninteractive",
+                ],
+            ) || token == "iex"
+                || token.starts_with("iex(")
+                || token == "invoke-expression"
+                || token.starts_with("invoke-expression(")
+        });
+
+        let suspicious_pair = tokens.windows(2).any(|pair| {
+            (matches!(pair[0].as_str(), "-executionpolicy" | "-ep") && pair[1] == "bypass")
+                || (matches!(pair[0].as_str(), "-windowstyle" | "-w") && pair[1] == "hidden")
+        });
+
+        suspicious_switch
+            || suspicious_pair
+            || tokens.iter().any(|token| {
+                Self::option_has_value(token, &["-executionpolicy", "-ep"], "bypass")
+                    || Self::option_has_value(token, &["-windowstyle", "-w"], "hidden")
+            })
+    }
+
+    fn normalize_command_token(token: &str) -> String {
+        token
+            .trim_matches(|c: char| {
+                matches!(
+                    c,
+                    '"' | '\'' | ',' | ';' | '&' | '|' | '(' | ')' | '{' | '}'
+                )
+            })
+            .to_ascii_lowercase()
+    }
+
+    fn is_powershell_executable(token: &str) -> bool {
+        let token = token.trim_matches(['"', '\'']);
+        let name = token.rsplit(['\\', '/']).next().unwrap_or(token);
+        matches!(
+            name.to_ascii_lowercase().as_str(),
+            "powershell" | "powershell.exe" | "pwsh" | "pwsh.exe"
+        )
+    }
+
+    fn is_option(token: &str, names: &[&str]) -> bool {
+        names.iter().any(|name| {
+            token == *name
+                || token
+                    .strip_prefix(name)
+                    .is_some_and(|suffix| suffix.starts_with('=') || suffix.starts_with(':'))
+        })
+    }
+
+    fn option_has_value(token: &str, names: &[&str], expected_value: &str) -> bool {
+        names.iter().any(|name| {
+            token
+                .strip_prefix(name)
+                .and_then(|suffix| {
+                    suffix
+                        .strip_prefix('=')
+                        .or_else(|| suffix.strip_prefix(':'))
+                })
+                .is_some_and(|value| value == expected_value)
+        })
+    }
+
     pub fn evaluate(ctx: &RiskContext) -> RiskInfo {
         let mut score: i32 = 0;
         let mut reason_codes: Vec<String> = Vec::new();
@@ -81,16 +168,7 @@ impl RiskEngine {
         // 3. Heurísticas de contexto de ejecución (v0.3)
         // ------------------------------------------------------------
         if let Some(cmd) = &ctx.process.command_line {
-            let cmd_lower = cmd.to_lowercase();
-            if cmd_lower.contains("-enc")
-                || cmd_lower.contains("-encodedcommand")
-                || cmd_lower.contains("bypass")
-                || cmd_lower.contains("hidden")
-                || cmd_lower.contains("nop")
-                || cmd_lower.contains("noninteractive")
-                || cmd_lower.contains("iex")
-                || cmd_lower.contains("invoke-expression")
-            {
+            if Self::has_suspicious_command_line(&ctx.process.name, cmd) {
                 score += 60;
                 push(&mut reason_codes, "SUSPICIOUS_COMMAND_LINE");
             }
@@ -579,6 +657,77 @@ mod tests {
             .reason_codes
             .contains(&"SUSPICIOUS_COMMAND_LINE".to_string()));
         assert_eq!(risk.band, "potentially_dangerous");
+    }
+
+    #[test]
+    fn chromium_bypasscsp_switch_is_not_suspicious() {
+        let mut p = process("ProgramFiles");
+        p.name = "ChatGPT.exe".to_string();
+        p.command_line = Some(
+            r#""C:\Program Files\WindowsApps\OpenAI.Codex\app\ChatGPT.exe" --type=utility --utility-sub-type=network.mojom.NetworkService --bypasscsp-schemes=sentry-ipc --disable-features=NetworkServiceSandbox"#
+                .to_string(),
+        );
+        let ctx = RiskContext {
+            process: &p,
+            identity: &identity(Some("12")),
+            trust: &valid_trust(),
+            baseline: &baseline("Unknown"),
+            affinity: &affinity("none", 0),
+            hash_changed: false,
+            ip_only_destination: true,
+        };
+        let risk = RiskEngine::evaluate(&ctx);
+
+        assert!(!risk
+            .reason_codes
+            .contains(&"SUSPICIOUS_COMMAND_LINE".to_string()));
+        assert_eq!(risk.band, "known_low");
+        assert_eq!(risk.score, 35);
+    }
+
+    #[test]
+    fn powershell_execution_policy_bypass_is_suspicious() {
+        let mut p = process("Windows");
+        p.name = "powershell.exe".to_string();
+        p.command_line =
+            Some("powershell.exe -ExecutionPolicy Bypass -File script.ps1".to_string());
+        let ctx = RiskContext {
+            process: &p,
+            identity: &identity(Some("13")),
+            trust: &valid_trust(),
+            baseline: &baseline("Unknown"),
+            affinity: &affinity("none", 0),
+            hash_changed: false,
+            ip_only_destination: false,
+        };
+        let risk = RiskEngine::evaluate(&ctx);
+
+        assert!(risk
+            .reason_codes
+            .contains(&"SUSPICIOUS_COMMAND_LINE".to_string()));
+        assert_eq!(risk.band, "potentially_dangerous");
+    }
+
+    #[test]
+    fn powershell_literal_bypass_is_not_suspicious() {
+        let mut p = process("Windows");
+        p.name = "powershell.exe".to_string();
+        p.command_line = Some("powershell.exe Write-Output bypass".to_string());
+        let ctx = RiskContext {
+            process: &p,
+            identity: &identity(Some("14")),
+            trust: &valid_trust(),
+            baseline: &baseline("Candidate"),
+            affinity: &affinity("medium", 75),
+            hash_changed: false,
+            ip_only_destination: false,
+        };
+        let risk = RiskEngine::evaluate(&ctx);
+
+        assert!(!risk
+            .reason_codes
+            .contains(&"SUSPICIOUS_COMMAND_LINE".to_string()));
+        assert_eq!(risk.band, "known_low");
     }
 
     #[test]

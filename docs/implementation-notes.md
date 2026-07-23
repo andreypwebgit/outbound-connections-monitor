@@ -367,3 +367,32 @@ volver a `Candidate`; no se permite editar estados libremente.
 CI ejecuta `cargo fmt --check` y
 `cargo clippy --locked --all-targets -- -D warnings` antes de los tests. La
 suite v0.5.0 contiene 86 tests. No se añadieron crates ni dependencias JS.
+
+## 15. v0.5.1
+
+### 15.1 Precisión de `SUSPICIOUS_COMMAND_LINE`
+
+La heurística anterior aplicaba `contains()` sobre toda línea de comandos y
+trataba cualquier aparición de `bypass`, `hidden`, `nop` o `iex` como
+sospechosa. Esto producía falsos positivos en aplicaciones Chromium/Electron:
+su flag legítimo `--bypasscsp-schemes` se confundía con la política
+`-ExecutionPolicy Bypass` de PowerShell.
+
+Decisión:
+
+- no se crea una allowlist para ChatGPT, ningún otro producto, ruta, hash o
+  firmante;
+- los indicadores se tokenizan y solo se evalúan si el proceso es
+  `powershell`/`pwsh` o la línea invoca explícitamente esos intérpretes;
+- los switches (`-EncodedCommand`, `-NoProfile`, `-NonInteractive`) y las
+  expresiones (`iex`, `Invoke-Expression`) requieren tokens completos;
+- `bypass` solo puntúa como valor de `-ExecutionPolicy`/`-ep`, y `hidden`
+  como valor de `-WindowStyle`/`-w`, también en formas `=` o `:`;
+- una coincidencia válida mantiene la penalización de 60 puntos.
+
+Los payloads históricos en `scans.raw_json` no se recalculan: conservan la
+evaluación reproducible que recibieron. Los nuevos scans usan la heurística
+corregida. No cambian el contrato `scan_now`, el lifecycle de baseline ni el
+esquema SQLite.
+
+La suite v0.5.1 contiene 89 tests. No se añadieron crates ni dependencias JS.

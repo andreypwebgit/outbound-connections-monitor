@@ -114,6 +114,20 @@ rigurosas; un reason code sin correspondencia clara no se fuerza.
 La implementación de referencia vive en `src/js/render/detail.js`
 (`MITRE_TECHNIQUES`); si se amplía el mapeo, actualizar ambos.
 
+### Detección contextual de línea de comandos
+
+`SUSPICIOUS_COMMAND_LINE` se reserva para indicadores PowerShell reconocidos
+como argumentos completos dentro de `powershell`/`pwsh` o de una invocación
+explícita a esos intérpretes. Incluye `-EncodedCommand`, `-NoProfile`,
+`-NonInteractive`, `Invoke-Expression`, `-ExecutionPolicy Bypass` y
+`-WindowStyle Hidden`, con sus abreviaturas soportadas.
+
+No se buscan palabras por substring en procesos arbitrarios: por ejemplo,
+el flag legítimo de Chromium/Electron `--bypasscsp-schemes` no representa
+`-ExecutionPolicy Bypass` y no debe elevar el riesgo. Una coincidencia
+contextual válida conserva todo su peso; esta precisión no es una allowlist
+por nombre, ruta, hash o proveedor.
+
 ## Afinidad
 
 La afinidad alimenta el score, pero no lo sustituye.

@@ -140,3 +140,8 @@ instaladores lo despliegan como `out-cxns-monitor.exe` con accesos directos.
 Smoke test v0.5.0 realizado con `npx tauri dev`: ventana WebView2 operativa,
 scan real, historial/diff y gestión del baseline renderizados. Con identity
 cache completamente caliente, un snapshot de 45 findings terminó en 366 ms.
+
+Smoke test v0.5.1 realizado el 2026-07-23 con `npx tauri dev`: compilación
+debug correcta, `target/debug/app.exe` iniciado y ventana WebView2
+`Outbound Connections Monitor` operativa. La instancia de desarrollo se
+cerró de forma controlada después de la comprobación.

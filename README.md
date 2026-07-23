@@ -46,11 +46,12 @@ El proyecto está diseñado bajo estrictos requerimientos de simplicidad operati
 *   **Linaje y Contexto de Ejecución:** Proceso Padre, **Línea de Comandos** completa, **Usuario** e instante de inicio del proceso.
 *   **Resolución DNS Inversa (Hostname):** Las IPs remotas se traducen a nombres de dominio (y dominio raíz derivado) para contextualizar los destinos.
 *   **Inteligencia Heurística Avanzada:** El *Risk Engine* castiga procesos de red hijos de Office (`winword.exe`), scripts de sistema u ofuscación en línea de comandos (ej. `-enc`, `-bypass`), y bonifica firmas válidas, baseline consolidado y alta afinidad.
+*   **Línea de comandos contextual (v0.5.1):** los indicadores de PowerShell se reconocen como argumentos completos y dentro de su intérprete; flags legítimos de Chromium/Electron como `--bypasscsp-schemes` ya no producen falsos positivos, sin rebajar la penalización de `-ExecutionPolicy Bypass` o `-EncodedCommand`.
 *   **Excepciones de Sistema (Protected Processes):** Reconoce procesos fuertemente protegidos del Kernel (`System`, `MsMpEng.exe`) evitando falsos positivos al justificar por qué no se pueden obtener hashes o rutas de disco.
 *   **Auditoría técnica:** eventos internos (`scan_started`, transiciones de baseline, errores de hash/persistencia, exports) quedan registrados en `audit_events`.
 *   **Filtro de búsqueda en hallazgos (v0.4.1):** filtrado instantáneo por proceso, IP, hostname, dominio, ruta o hash, combinable con los filtros de riesgo.
 *   **Mapeo MITRE ATT&CK (v0.4.1):** los reason codes con correspondencia rigurosa muestran sus técnicas (T1059, T1036.005, T1070.004…) enlazadas a attack.mitre.org.
-*   **Tests del dominio crítico:** 86 tests (contrato JSON, collector nativo, diff, scoring, transiciones de baseline, afinidad, caché de identidad, clasificación de rutas e integración SQLite), más `cargo fmt --check` y Clippy sin warnings en CI.
+*   **Tests del dominio crítico:** 89 tests (contrato JSON, collector nativo, diff, scoring, transiciones de baseline, afinidad, caché de identidad, clasificación de rutas e integración SQLite), más `cargo fmt --check` y Clippy sin warnings en CI.
 
 ---
 

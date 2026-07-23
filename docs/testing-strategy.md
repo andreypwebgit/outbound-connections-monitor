@@ -100,7 +100,7 @@ vista de baseline.
   dependencias) y `src-tauri/tests/storage_test.rs` (SQLite end-to-end).
 - Ejecución: `cargo test` dentro de `src-tauri/`.
 
-Suite v0.5.0: **86 tests** (69 unitarios + 8 de contrato + 9 de integración
+Suite v0.5.1: **89 tests** (72 unitarios + 8 de contrato + 9 de integración
 SQLite). CI ejecuta además `cargo fmt --check` y
 `cargo clippy --locked --all-targets -- -D warnings`.
 

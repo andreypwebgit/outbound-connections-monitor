@@ -54,6 +54,14 @@ Posibles mejoras:
 Se mantiene deliberadamente fuera: monitorización continua, bloqueo,
 remediación e intel externo obligatorio.
 
+## v0.5.1 — completada
+
+- precisión contextual de `SUSPICIOUS_COMMAND_LINE`;
+- eliminación del falso positivo de `--bypasscsp-schemes` en aplicaciones
+  Chromium/Electron;
+- conservación de la detección fuerte de argumentos PowerShell reales, sin
+  allowlists por producto.
+
 ## v1.0
 
 Objetivo:
