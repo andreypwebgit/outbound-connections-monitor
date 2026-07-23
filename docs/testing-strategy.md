@@ -82,6 +82,18 @@ Validar:
 - lectura, persistencia y exportación de históricos v1 sin cobertura
   inventada.
 
+### 10. Política de release
+
+`scripts/test-release-pipeline.ps1` valida sin dependencias adicionales:
+
+- aceptación del tag que coincide con los cuatro manifiestos y rechazo de uno
+  divergente;
+- presencia de build Tauri, checksums SHA-256, SBOM, attestation y publicación;
+- ausencia de credenciales Azure, `signCommand`, environment de firma y
+  scripts retirados;
+- aviso unsigned coherente en workflow, README, SECURITY y documentación de
+  distribución.
+
 ## Escenarios mínimos obligatorios
 
 1. proceso firmado, hash conocido y destino habitual;
@@ -112,8 +124,9 @@ Validar:
 - Ejecución: `cargo test` dentro de `src-tauri/`.
 
 Suite v1.0.0: **101 tests** (80 unitarios + 11 de contrato + 10 de
-integración SQLite). CI ejecuta además validación de versiones, auditoría npm,
-build de Tailwind, `cargo fmt --check` y
+integración SQLite), más el test de política del pipeline de release. CI
+ejecuta además validación de versiones, auditoría npm, build de Tailwind,
+`cargo fmt --check` y
 `cargo clippy --locked --all-targets -- -D warnings`.
 
 Los mocks de VirusTotal/AbuseIPDB quedan pendientes de que exista el bloque

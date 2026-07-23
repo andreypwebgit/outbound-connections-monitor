@@ -421,21 +421,22 @@ el intel externo está desactivado y que DNS tiene 200 ms de presupuesto.
 reserializar históricos v1. El schema v2 lo exige, y UI, SQLite y exportador
 no inventan cobertura al abrir un payload v1.
 
-### 16.2 Firma y supply chain
+### 16.2 Distribución unsigned y supply chain
 
-La release usa el `signCommand` de Tauri para firmar cada ejecutable después
-de que el bundler adapte sus recursos y antes de incorporarlo al MSI/NSIS; el
-mismo hook firma los instaladores terminados. Microsoft Artifact Signing se
-autentica con OIDC y configuración protegida en el environment `release`; no
-se almacena PFX. El cliente Microsoft 1.0.128 está fijado y su paquete se
-verifica contra un SHA-256 conocido antes de extraerlo.
+Microsoft Artifact Signing no está disponible para el proyecto y v1.0.0 se
+publica sin firma Authenticode por decisión explícita del propietario. El
+workflow no conserva configuración Azure ni scripts de firma inoperantes. La
+ausencia de identidad de editor se declara en README, SECURITY, documentación
+de distribución y notas de la propia release; checksums y attestation se
+presentan solo como controles de integridad y procedencia.
 
 Gates añadidos:
 
 - tag exacto y cuatro versiones sincronizadas;
 - acciones fijadas por SHA y Dependabot;
 - `npm audit --audit-level=high`;
-- Authenticode `Valid` en ejecutable, MSI y NSIS;
+- test de política que impide reintroducir requisitos de Artifact Signing o
+  afirmar que los binarios están firmados;
 - checksums SHA-256, SBOM SPDX y GitHub artifact attestation;
 - publicación solo después de completar todos los gates.
 

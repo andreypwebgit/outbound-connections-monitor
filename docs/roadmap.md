@@ -67,7 +67,8 @@ remediación e intel externo obligatorio.
 - arquitectura y contrato público estabilizados en `scan_now` v2;
 - panel de completitud con cobertura por etapa, limitaciones y warnings;
 - compatibilidad fiel con históricos v1 sin inferencia retrospectiva;
-- ejecutable, MSI y NSIS firmados y verificados antes de publicación;
+- ejecutable, MSI y NSIS publicados sin firma Authenticode y con aviso
+  explícito de `Editor desconocido`/SmartScreen;
 - release con versiones sincronizadas, checksums SHA-256, SBOM SPDX y
   attestation de procedencia;
 - CI y release sobre Windows 2022 con acciones fijadas por commit, auditoría

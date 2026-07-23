@@ -10,12 +10,12 @@
 Analizador local y bajo demanda de conexiones salientes para Windows, estable,
 explicable y transparente sobre la cobertura real de cada escaneo.
 
-> **🔐 Releases oficiales v1:** el ejecutable, MSI y NSIS publicados por el
-> workflow de release se firman con Microsoft Artifact Signing, llevan sello
-> de tiempo y se verifican antes de publicarse. Cada release incluye SHA-256,
-> SBOM SPDX y attestation de procedencia. Comprueba siempre el editor y la
-> firma: SmartScreen puede seguir advirtiendo mientras la aplicación construye
-> reputación y una firma válida no convierte por sí sola un binario en seguro.
+> **⚠️ Aviso de firma:** el ejecutable, MSI y NSIS de v1.0.0 no están firmados
+> con Authenticode. Windows puede mostrar `Editor desconocido` o una
+> advertencia de SmartScreen. Descarga OCM únicamente desde la
+> [release oficial](https://github.com/andreypwebgit/outbound-connections-monitor/releases/latest)
+> y verifica `checksums.txt` y la attestation de GitHub. La release mantiene
+> SHA-256, SBOM SPDX y procedencia vinculada al workflow y al commit.
 
 ## 🏗 Arquitectura actual (v1.0)
 
@@ -69,9 +69,10 @@ El proyecto está diseñado bajo estrictos requerimientos de simplicidad operati
 *   **Filtro de búsqueda en hallazgos (v0.4.1):** filtrado instantáneo por proceso, IP, hostname, dominio, ruta o hash, combinable con los filtros de riesgo.
 *   **Mapeo MITRE ATT&CK (v0.4.1):** los reason codes con correspondencia rigurosa muestran sus técnicas (T1059, T1036.005, T1070.004…) enlazadas a attack.mitre.org.
 *   **Supply chain de release (v1.0):** acciones fijadas por SHA, versiones
-    sincronizadas, auditoría npm, build y tests en Windows 2022, firma
-    Authenticode mediante OIDC, verificación obligatoria, checksums, SBOM y
-    attestation antes de publicar.
+    sincronizadas, auditoría npm, build y tests en Windows 2022, checksums,
+    SBOM y attestation antes de publicar. Los binarios se declaran
+    explícitamente unsigned; la integridad y procedencia no se presentan como
+    sustituto de una firma de editor.
 *   **Tests del dominio crítico:** 101 tests (80 unitarios, 11 de contrato y
     10 de integración SQLite), incluidos collector degradado, reglas de
     completitud, exportación y compatibilidad histórica v1/v2; CI añade
@@ -130,9 +131,9 @@ Aunque OCM ya ofrece capacidades tácticas potentes, estas son algunas rutas par
 *   ✅ **Hecho en v0.4.1** — cada push a `main` ejecuta la suite completa de tests en GitHub Actions, y cada tag `v*` compila los instaladores y publica la release con checksums automáticamente (ver [docs/build-and-distribution.md](docs/build-and-distribution.md)).
 *   ✅ **Endurecido en v0.5.0** — el CI exige formato Rust canónico y Clippy con warnings tratados como errores.
 *   ✅ **Hecho en v1.0.0** — tag exacto y manifiestos sincronizados, acciones
-    fijadas por commit, firma de ejecutable/MSI/NSIS con Microsoft Artifact
-    Signing y OIDC, verificación Authenticode, SBOM SPDX, checksums SHA-256 y
-    attestation de procedencia como gates obligatorios.
+    fijadas por commit, build y tests en Windows 2022, SBOM SPDX, checksums
+    SHA-256 y attestation de procedencia como gates obligatorios. La release
+    v1.0.0 se publica sin firma Authenticode y lo declara de forma visible.
 
 ### 6. Transparencia de cobertura
 *   ✅ **Hecho en v1.0.0** — panel y contrato de completitud de evidencia con

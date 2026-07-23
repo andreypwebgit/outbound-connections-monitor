@@ -17,9 +17,8 @@ concurrency:
 
 jobs:
   build-and-release:
-    name: Build, sign, attest & publish release
+    name: Build, attest & publish release
     runs-on: windows-2022
-    environment: release
 
     steps:
       - name: Checkout
@@ -31,16 +30,11 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Validate version and signing configuration
+      - name: Validate version and release policy
         shell: pwsh
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          ARTIFACT_SIGNING_ENDPOINT: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
-          ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
-          ARTIFACT_SIGNING_CERTIFICATE_PROFILE: ${{ vars.ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
-        run: .\scripts\validate-release.ps1 -Tag "${{ github.ref_name }}" -RequireSigningConfiguration
+        run: |
+          .\scripts\validate-release.ps1 -Tag "${{ github.ref_name }}"
+          .\scripts\test-release-pipeline.ps1
 
       - name: Install frontend dependencies
         run: npm ci
@@ -65,82 +59,26 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked
 
-      - name: Authenticate to Azure with OIDC
-        uses: azure/login@2dd0bbf4064d5a1812889dc200bb8eed2597f82a # v3
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Install pinned Artifact Signing client
-        shell: pwsh
-        env:
-          ARTIFACT_SIGNING_ENDPOINT: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
-          ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
-          ARTIFACT_SIGNING_CERTIFICATE_PROFILE: ${{ vars.ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
-        run: |
-          $version = "1.0.128"
-          $expectedSha256 = "74bd7d27e6ce1051409c38d9b46bc8df0400ecd643d51ffbf2ac00869061e40b"
-          $archive = Join-Path $env:RUNNER_TEMP "artifact-signing-client-$version.zip"
-          $client = Join-Path $env:RUNNER_TEMP "artifact-signing-client-$version"
-          $uri = "https://api.nuget.org/v3-flatcontainer/microsoft.artifactsigning.client/$version/microsoft.artifactsigning.client.$version.nupkg"
-          Invoke-WebRequest -Uri $uri -OutFile $archive
-          $actualSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actualSha256 -ne $expectedSha256) {
-            throw "Artifact Signing client SHA-256 mismatch."
-          }
-          Expand-Archive -LiteralPath $archive -DestinationPath $client
-          $dlib = Join-Path $client "bin\x64\Azure.CodeSigning.Dlib.dll"
-          if (-not (Test-Path -LiteralPath $dlib -PathType Leaf)) {
-            throw "Azure.CodeSigning.Dlib.dll no encontrado."
-          }
-          $metadata = Join-Path $env:RUNNER_TEMP "artifact-signing-metadata.json"
-          @{
-            Endpoint = $env:ARTIFACT_SIGNING_ENDPOINT
-            CodeSigningAccountName = $env:ARTIFACT_SIGNING_ACCOUNT
-            CertificateProfileName = $env:ARTIFACT_SIGNING_CERTIFICATE_PROFILE
-            CorrelationId = $env:GITHUB_RUN_ID
-            ExcludeCredentials = @(
-              "EnvironmentCredential",
-              "ManagedIdentityCredential",
-              "WorkloadIdentityCredential",
-              "SharedTokenCacheCredential",
-              "VisualStudioCredential",
-              "VisualStudioCodeCredential",
-              "AzurePowerShellCredential",
-              "AzureDeveloperCliCredential",
-              "InteractiveBrowserCredential"
-            )
-          } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $metadata -Encoding utf8
-          "ARTIFACT_SIGNING_DLIB_PATH=$dlib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "ARTIFACT_SIGNING_METADATA_PATH=$metadata" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Build, sign and bundle application
+      - name: Build and bundle application
         shell: pwsh
         run: |
-          $signScript = (Resolve-Path ".\scripts\sign-artifact.ps1").Path
-          $signCommand = "pwsh -NoProfile -ExecutionPolicy Bypass -File `"$signScript`" %1"
-          $config = @{
-            bundle = @{
-              windows = @{
-                signCommand = $signCommand
-              }
-            }
-          } | ConvertTo-Json -Depth 4 -Compress
-          npx tauri build --ci --config $config
+          npx tauri build --ci
           if ($LASTEXITCODE -ne 0) {
             throw "Tauri build fallo con exit code $LASTEXITCODE."
           }
 
-      - name: Prepare and verify release artifacts
+      - name: Prepare release artifacts
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Path release-artifacts -Force | Out-Null
           Copy-Item src-tauri/target/release/app.exe release-artifacts/out-cxns-monitor.exe
           Copy-Item src-tauri/target/release/bundle/msi/*.msi release-artifacts/
           Copy-Item src-tauri/target/release/bundle/nsis/*-setup.exe release-artifacts/
-          $signed = Get-ChildItem release-artifacts -File | Select-Object -ExpandProperty FullName
-          .\scripts\verify-signatures.ps1 -Paths $signed
+          $artifacts = @(Get-ChildItem release-artifacts -File)
+          if ($artifacts.Count -ne 3) {
+            throw "Se esperaban 3 binarios de release y se encontraron $($artifacts.Count)."
+          }
 
       - name: Generate SPDX SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
@@ -168,7 +106,7 @@ jobs:
           body: |
             ## 🌐 [ocm.apwebai.es](https://ocm.apwebai.es/) — web oficial del proyecto
 
-            **Outbound Connections Monitor (OCM) ${{ github.ref_name }}** es un analizador local y bajo demanda de conexiones salientes para Windows: collector nativo, identidad SHA-256, firma Authenticode, linaje de procesos, baseline, afinidad, riesgo explicable y panel de completitud de evidencia.
+            **Outbound Connections Monitor (OCM) ${{ github.ref_name }}** es un analizador local y bajo demanda de conexiones salientes para Windows: collector nativo, identidad SHA-256, firma Authenticode de los binarios observados, linaje de procesos, baseline, afinidad, riesgo explicable y panel de completitud de evidencia.
 
             ### 📦 Instalación
 
@@ -180,8 +118,10 @@ jobs:
 
             Requisitos: Windows 10 o superior. Si falta el runtime WebView2, el instalador lo descarga automáticamente.
 
-            ### 🔐 Integridad y procedencia
+            ### 🔐 Integridad, procedencia y aviso de firma
 
-            El ejecutable, MSI y NSIS están firmados mediante Microsoft Artifact Signing y timestamp RFC 3161. El workflow verifica cada firma antes de publicar, genera checksums, SBOM y una attestation de procedencia vinculada al commit y al workflow.
+            Los binarios de esta release no están firmados con Authenticode. Windows puede mostrar `Editor desconocido` o una advertencia de SmartScreen. Descarga OCM únicamente desde esta release oficial y verifica los hashes SHA-256 de `checksums.txt` y la attestation de procedencia de GitHub antes de ejecutarlo.
+
+            El workflow construye desde el tag publicado, ejecuta los gates de calidad, genera checksums y SBOM, y vincula todos los artefactos al commit y al workflow mediante GitHub artifact attestations.
           files: |
             release-artifacts/*

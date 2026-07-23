@@ -11,12 +11,9 @@ La vía oficial es el pipeline de GitHub Actions:
   exige `cargo fmt --check`, ejecuta Clippy con warnings como error y lanza la
   suite completa de tests en un runner Windows.
 - **`.github/workflows/release.yml`** — un tag `vX.Y.Z` exacto valida las
-  cuatro versiones, ejecuta los mismos gates y delega la firma en el
-  `signCommand` de Tauri: cada ejecutable se firma después de adaptar sus
-  recursos al bundle y antes de incorporarlo al MSI/NSIS; los instaladores se
-  firman al finalizar. Después verifica todas las firmas y publica ejecutable,
-  MSI, NSIS,
-  `checksums.txt`, SBOM SPDX y attestation de procedencia.
+  cuatro versiones, comprueba la política de publicación, ejecuta los mismos
+  gates, construye ejecutable, MSI y NSIS, y publica `checksums.txt`, SBOM
+  SPDX y attestation de procedencia junto a los binarios.
 
 Las acciones de terceros están fijadas por SHA completo y Dependabot propone
 sus actualizaciones. Los runners son `windows-2022`, Node está fijado a la
@@ -32,29 +29,15 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-No debe crearse el tag hasta que CI esté verde y el entorno protegido
-`release` tenga configurada la firma. Un fallo de test, firma, SBOM,
+No debe crearse el tag hasta que CI esté verde. Un fallo de test, build, SBOM,
 attestation o publicación detiene el workflow.
 
-## Configuración de firma de la release
+## Política de firma de la release
 
-La release usa Microsoft Artifact Signing con federación OIDC; no guarda una
-clave privada ni un PFX en GitHub. El entorno GitHub `release` requiere:
-
-Secrets:
-- `AZURE_CLIENT_ID`
-- `AZURE_TENANT_ID`
-- `AZURE_SUBSCRIPTION_ID`
-
-Variables:
-- `ARTIFACT_SIGNING_ENDPOINT`
-- `ARTIFACT_SIGNING_ACCOUNT`
-- `ARTIFACT_SIGNING_CERTIFICATE_PROFILE`
-
-La identidad federada debe poder autenticarse desde este repositorio y tener
-el rol **Artifact Signing Certificate Profile Signer** sobre el perfil. El
-workflow necesita `id-token: write`; las demás credenciales no se imprimen ni
-se incorporan a los artefactos.
+Los binarios oficiales v1.0.0 no están firmados con Authenticode porque el
+proyecto no dispone de un certificado de firma de código público. El workflow
+no solicita credenciales Azure, no descarga clientes de firma y no presenta
+checksums o attestations como si fueran una identidad de editor.
 
 El build local descrito a continuación sigue siendo válido para desarrollo
 y verificación manual.
@@ -133,16 +116,12 @@ modelo).
 
 ## Firma, SmartScreen y verificación
 
-Las releases oficiales v1 integran Microsoft Artifact Signing en el
-`signCommand` de Tauri. Así el `.exe` se firma después del parcheo de recursos
-que identifica cada tipo de bundle y antes de quedar embebido; MSI y NSIS se
-firman una vez generados. Todas las firmas usan SHA-256 y sello de tiempo
-RFC 3161. `verify-signatures.ps1` exige estado Authenticode `Valid` antes de
-publicar.
-
-La firma aporta identidad e integridad, pero no garantiza que SmartScreen no
-muestre advertencias: la reputación del editor y del archivo también influye.
-No debe recomendarse ignorar una advertencia sin comprobar antes el origen.
+El ejecutable, MSI y NSIS de v1.0.0 no están firmados con Authenticode.
+Windows puede mostrar `Editor desconocido` o una advertencia de SmartScreen.
+No debe recomendarse ignorar la advertencia: antes de ejecutar hay que
+comprobar que el archivo procede de la release oficial, que su SHA-256 coincide
+con `checksums.txt` y que la attestation lo vincula al workflow de este
+repositorio.
 
 Verificación local:
 
@@ -152,8 +131,9 @@ Get-AuthenticodeSignature .\out-cxns-monitor.exe |
 Get-FileHash .\out-cxns-monitor.exe -Algorithm SHA256
 ```
 
-El hash debe coincidir con `checksums.txt`. Con GitHub CLI también puede
-verificarse la procedencia:
+`Get-AuthenticodeSignature` debe informar `NotSigned`; no es un fallo de
+descarga sino el estado publicado y documentado. El hash debe coincidir con
+`checksums.txt`. Con GitHub CLI también puede verificarse la procedencia:
 
 ```powershell
 gh attestation verify .\out-cxns-monitor.exe `
@@ -209,5 +189,5 @@ Validación local v1.0.0 realizada el 2026-07-23:
   mantenido en ejecución durante el smoke y cierre controlado;
 - el bundle MSI local requiere que la característica opcional VBSCRIPT de
   Windows esté habilitada. La release oficial se construye en
-  `windows-2022`, donde el workflow debe producir y verificar ambos formatos
-  antes de publicar.
+  `windows-2022`, donde el workflow debe producir ambos formatos antes de
+  publicar.

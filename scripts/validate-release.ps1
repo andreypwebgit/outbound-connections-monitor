@@ -1,6 +1,5 @@
 param(
-    [string]$Tag = "",
-    [switch]$RequireSigningConfiguration
+    [string]$Tag = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,22 +36,4 @@ if ($Tag) {
     }
 }
 
-if ($RequireSigningConfiguration) {
-    $required = @(
-        "AZURE_CLIENT_ID",
-        "AZURE_TENANT_ID",
-        "AZURE_SUBSCRIPTION_ID",
-        "ARTIFACT_SIGNING_ENDPOINT",
-        "ARTIFACT_SIGNING_ACCOUNT",
-        "ARTIFACT_SIGNING_CERTIFICATE_PROFILE"
-    )
-    $missing = $required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
-    if ($missing.Count -gt 0) {
-        throw "Falta configuracion de firma: $($missing -join ', ')."
-    }
-}
-
 Write-Output "Version validada: $cargoVersion"
-if ($RequireSigningConfiguration) {
-    Write-Output "Configuracion de Artifact Signing presente."
-}

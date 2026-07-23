@@ -30,8 +30,9 @@ an exact `vX.Y.Z` tag. The workflow:
 
 - validates tag and manifest versions;
 - runs formatting, Clippy and the complete Rust suite;
-- signs the executable, MSI and NSIS artifacts with Microsoft Artifact Signing;
-- verifies Authenticode signatures before publication;
+- states explicitly that the executable, MSI and NSIS are not
+  Authenticode-signed and may trigger Windows publisher or SmartScreen
+  warnings;
 - publishes SHA-256 checksums and an SPDX SBOM;
 - generates a GitHub artifact attestation tied to the source commit.
 
