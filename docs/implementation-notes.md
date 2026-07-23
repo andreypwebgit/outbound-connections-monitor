@@ -396,3 +396,57 @@ corregida. No cambian el contrato `scan_now`, el lifecycle de baseline ni el
 esquema SQLite.
 
 La suite v0.5.1 contiene 89 tests. No se añadieron crates ni dependencias JS.
+
+## 16. v1.0.0
+
+### 16.1 Completitud de evidencia y contrato v2
+
+`scan_now` pasa a `schema_version: "v2"` y añade el bloque obligatorio
+`coverage`. La clasificación se calcula en `core/coverage.rs` después del
+enriquecimiento y antes de persistir:
+
+- `complete`: collector TCP/UDP completo, ejecución elevada, sin warnings ni
+  timeout DNS y con evidencia material/contextual completa en findings no
+  protegidos;
+- `partial`: el núcleo TCP existe, pero falta elevación o evidencia
+  auxiliar/contextual;
+- `degraded`: falta una familia TCP o identidad material de un finding no
+  protegido.
+
+La cobertura no modifica score, baseline ni recomendaciones. Las limitaciones
+estables declaran que el scan es puntual, que UDP no aporta peer remoto, que
+el intel externo está desactivado y que DNS tiene 200 ms de presupuesto.
+
+`ScanNowResponse.coverage` es `Option` únicamente para deserializar y
+reserializar históricos v1. El schema v2 lo exige, y UI, SQLite y exportador
+no inventan cobertura al abrir un payload v1.
+
+### 16.2 Firma y supply chain
+
+La release usa el `signCommand` de Tauri para firmar cada ejecutable después
+de que el bundler adapte sus recursos y antes de incorporarlo al MSI/NSIS; el
+mismo hook firma los instaladores terminados. Microsoft Artifact Signing se
+autentica con OIDC y configuración protegida en el environment `release`; no
+se almacena PFX. El cliente Microsoft 1.0.128 está fijado y su paquete se
+verifica contra un SHA-256 conocido antes de extraerlo.
+
+Gates añadidos:
+
+- tag exacto y cuatro versiones sincronizadas;
+- acciones fijadas por SHA y Dependabot;
+- `npm audit --audit-level=high`;
+- Authenticode `Valid` en ejecutable, MSI y NSIS;
+- checksums SHA-256, SBOM SPDX y GitHub artifact attestation;
+- publicación solo después de completar todos los gates.
+
+### 16.3 Calidad
+
+La suite v1.0.0 contiene 101 tests: 80 unitarios, 11 de contrato y 10 de
+integración SQLite. Se añadieron pruebas de fallo independiente del collector,
+clasificación de cobertura, exportación y compatibilidad histórica v1/v2. No
+se añadieron crates ni dependencias JS.
+
+En debug, `tauri-plugin-log` escribe solo en stdout. El destino de archivo
+predeterminado podía devolver `Access denied` en perfiles restringidos y
+abortaba `npx tauri dev`; el terminal ya proporciona el log necesario y no
+debe convertir el logging auxiliar en requisito de arranque.

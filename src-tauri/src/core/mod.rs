@@ -1,6 +1,7 @@
 pub mod affinity;
 pub mod baseline_manager;
 pub mod collector;
+pub mod coverage;
 pub mod enricher;
 pub mod errors;
 pub mod exporter;

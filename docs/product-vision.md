@@ -2,7 +2,11 @@
 
 ## Qué es
 
-Aplicación de escritorio para Windows que ejecuta un escaneo manual de conexiones salientes activas mediante `Scan Now`, las asocia a su proceso responsable, las enriquece con identidad del binario y contexto de red, y las clasifica por baseline, afinidad y riesgo potencial.
+Aplicación de escritorio para Windows que ejecuta un escaneo manual de
+conexiones salientes activas mediante `Scan Now`, las asocia a su proceso
+responsable, las enriquece con identidad del binario y contexto de red, las
+clasifica por baseline, afinidad y riesgo potencial, y declara la cobertura
+real de la evidencia recogida.
 
 ## Qué problema resuelve
 
@@ -28,7 +32,7 @@ Ofrecer un escaneo puntual, rápido, explicable y útil del estado de red salien
 - priorizar hallazgos críticos como procesos huérfanos;
 - permitir validación manual en entornos de desarrollo.
 
-## No objetivos de v0.1
+## No objetivos
 
 - monitorización continua;
 - bloqueo automático;
@@ -48,10 +52,11 @@ Ofrecer un escaneo puntual, rápido, explicable y útil del estado de red salien
 5. Baseline por afinidad, no por “visto antes”.
 6. Primero local, luego externo.
 7. Producto pequeño, útil y mantenible.
+8. Transparencia sobre datos ausentes y límites del snapshot.
 
 ## Interacción principal
 
-La interacción principal de v0.1 es manual: botón `Scan Now`.
+La interacción principal es manual: botón `Scan Now`.
 
 ## Resultado esperado
 
@@ -64,3 +69,4 @@ Una lista de findings con:
 - afinidad;
 - score y banda de riesgo;
 - motivos y recomendación.
+- completitud global del snapshot, métricas y limitaciones.

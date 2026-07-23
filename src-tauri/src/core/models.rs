@@ -9,6 +9,10 @@ pub struct ScanNowResponse {
     pub duration_ms: u64,
     pub host: HostInfo,
     pub summary: ScanSummary,
+    /// Disponible desde schema v2. Los payloads históricos v1 carecen de
+    /// esta evidencia y deben seguir serializándose sin inventarla.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage: Option<ScanCoverage>,
     pub findings: Vec<Finding>,
 }
 
@@ -29,6 +33,62 @@ pub struct ScanSummary {
     pub candidate_count: u32,
     pub revalidation_count: u32,
     pub orphaned_count: u32,
+}
+
+/// Calidad y límites de la evidencia recogida en un snapshot. No expresa el
+/// riesgo ni la seguridad del equipo; solo qué partes del pipeline pudieron
+/// observarse de forma fiable.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct ScanCoverage {
+    pub status: String,
+    pub elevated: Option<bool>,
+    pub collector: CollectorCoverage,
+    pub process: ProcessCoverage,
+    pub identity: IdentityCoverage,
+    pub dns: DnsCoverage,
+    pub limitations: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+pub struct CollectorCoverage {
+    pub tcp_ipv4_collected: bool,
+    pub tcp_ipv6_collected: bool,
+    pub tcp_observations: u32,
+    pub udp_ipv4_collected: bool,
+    pub udp_ipv6_collected: bool,
+    pub udp_owner_endpoints: u32,
+    pub udp_findings: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+pub struct ProcessCoverage {
+    pub findings: u32,
+    pub protected_system_findings: u32,
+    pub complete_context: u32,
+    pub path_resolved: u32,
+    pub user_resolved: u32,
+    pub command_line_resolved: u32,
+    pub parent_resolved: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+pub struct IdentityCoverage {
+    pub complete_identity: u32,
+    pub hash_fresh: u32,
+    pub hash_cache: u32,
+    pub hash_unavailable: u32,
+    pub trust_resolved: u32,
+    pub trust_unknown: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
+pub struct DnsCoverage {
+    pub public_ip_candidates: u32,
+    pub cache_hits: u32,
+    pub resolved: u32,
+    pub no_ptr_record: u32,
+    pub timed_out: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

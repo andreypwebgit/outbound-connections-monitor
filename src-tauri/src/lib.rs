@@ -2,6 +2,7 @@ pub mod commands;
 pub mod core;
 
 use tauri::Manager;
+use tauri_plugin_log::{Target, TargetKind};
 
 use crate::core::paths::AppPaths;
 use crate::core::storage::Storage;
@@ -29,6 +30,10 @@ pub fn run() {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
                         .level(log::LevelFilter::Info)
+                        // En desarrollo el terminal ya es el destino
+                        // observable. Evitar LogDir impide que un permiso del
+                        // perfil del usuario bloquee el arranque completo.
+                        .targets([Target::new(TargetKind::Stdout)])
                         .build(),
                 )?;
             }

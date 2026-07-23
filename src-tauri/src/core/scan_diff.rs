@@ -138,6 +138,7 @@ mod tests {
                 app_version: "0.5.0".to_string(),
             },
             summary: ScanSummary::default(),
+            coverage: None,
             findings,
         }
     }

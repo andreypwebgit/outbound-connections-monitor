@@ -62,15 +62,21 @@ remediación e intel externo obligatorio.
 - conservación de la detección fuerte de argumentos PowerShell reales, sin
   allowlists por producto.
 
-## v1.0
+## v1.0.0 — completada
 
-Objetivo:
-- arquitectura estable
-- rendimiento validado
-- UX madura
-- documentación y testing endurecidos
+- arquitectura y contrato público estabilizados en `scan_now` v2;
+- panel de completitud con cobertura por etapa, limitaciones y warnings;
+- compatibilidad fiel con históricos v1 sin inferencia retrospectiva;
+- ejecutable, MSI y NSIS firmados y verificados antes de publicación;
+- release con versiones sincronizadas, checksums SHA-256, SBOM SPDX y
+  attestation de procedencia;
+- CI y release sobre Windows 2022 con acciones fijadas por commit, auditoría
+  npm, formato, Clippy y 101 tests;
+- documentación pública, técnica y política de seguridad alineadas.
+
+Se mantienen fuera por diseño: monitorización continua, bloqueo,
+remediación, packet capture e intel externo obligatorio.
 
 ## Regla de roadmap
 
-Nada de v0.2+ debe contaminar v0.1 sin necesidad explícita.
-El proyecto debe crecer por capas, no por anticipación.
+El proyecto debe crecer por capas y necesidad explícita, no por anticipación.

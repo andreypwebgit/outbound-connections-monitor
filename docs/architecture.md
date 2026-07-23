@@ -123,15 +123,32 @@ Consulta pura sobre dos payloads `scans.raw_json`. Identifica conexiones
 nuevas/cambiadas, binarios nuevos y cambios de baseline sin modificar el
 contrato `scan_now` ni el estado de aprendizaje.
 
+### 11. Coverage Engine
+
+Responsable de resumir la cobertura real del collector y del enriquecimiento
+sin alterar el riesgo ni el baseline.
+
+Entradas:
+- éxito/fallo por familia TCP y UDP;
+- ejecución elevada;
+- warnings del collector y del inventario de procesos;
+- contadores DNS;
+- campos de proceso, identidad y trust de los findings.
+
+Salida: bloque `coverage` del contrato v2 con estado `complete`, `partial` o
+`degraded`, métricas, limitaciones y warnings. Las reglas normativas viven en
+`docs/scan-completeness.md`.
+
 ## Flujo principal
 
 1. Usuario pulsa `Scan Now`.
 2. Collector obtiene observaciones crudas.
 3. Enricher resuelve binario, hash, firma y contexto.
 4. Risk Engine calcula baseline, afinidad, score y riesgo.
-5. Intel externo se consulta solo si aporta valor.
-6. Storage persiste scan y findings.
-7. Frontend recibe JSON estable y lo renderiza.
+5. Coverage Engine resume la calidad y los límites de la evidencia.
+6. Intel externo se consulta solo si aporta valor.
+7. Storage persiste scan y findings.
+8. Frontend recibe JSON estable y lo renderiza.
 
 ## Reglas de arquitectura
 

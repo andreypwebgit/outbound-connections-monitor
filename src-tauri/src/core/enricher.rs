@@ -55,6 +55,7 @@ mod win_process {
     const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
     const TOKEN_QUERY: u32 = 0x0008;
     const TOKEN_USER_CLASS: u32 = 1;
+    const TOKEN_ELEVATION_CLASS: u32 = 20;
     const PROCESS_COMMAND_LINE_INFORMATION: u32 = 60;
     const SC_MANAGER_ENUMERATE_SERVICE: u32 = 0x0004;
     const SC_ENUM_PROCESS_INFO: u32 = 0;
@@ -119,6 +120,30 @@ mod win_process {
             warnings.push(error);
         }
         Ok((map, warnings))
+    }
+
+    pub fn current_process_elevated() -> Option<bool> {
+        let mut token: Handle = ptr::null_mut();
+        let process = unsafe { GetCurrentProcess() };
+        if unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut token) } == 0 {
+            return None;
+        }
+        let token = OwnedHandle(token);
+        let mut elevation = TokenElevation {
+            token_is_elevated: 0,
+        };
+        let mut returned = 0u32;
+        let ok = unsafe {
+            GetTokenInformation(
+                token.0,
+                TOKEN_ELEVATION_CLASS,
+                (&mut elevation as *mut TokenElevation).cast(),
+                size_of::<TokenElevation>() as u32,
+                &mut returned,
+            )
+        };
+        (ok != 0 && returned >= size_of::<TokenElevation>() as u32)
+            .then_some(elevation.token_is_elevated != 0)
     }
 
     fn open_process(pid: u32) -> Option<OwnedHandle> {
@@ -447,6 +472,11 @@ mod win_process {
     }
 
     #[repr(C)]
+    struct TokenElevation {
+        token_is_elevated: u32,
+    }
+
+    #[repr(C)]
     #[derive(Clone, Copy)]
     struct UnicodeString {
         length: u16,
@@ -480,6 +510,7 @@ mod win_process {
     #[allow(non_snake_case)]
     extern "system" {
         fn CreateToolhelp32Snapshot(flags: u32, process_id: u32) -> Handle;
+        fn GetCurrentProcess() -> Handle;
         fn Process32FirstW(snapshot: Handle, entry: *mut ProcessEntry32W) -> i32;
         fn Process32NextW(snapshot: Handle, entry: *mut ProcessEntry32W) -> i32;
         fn OpenProcess(access: u32, inherit: i32, process_id: u32) -> Handle;
@@ -588,6 +619,10 @@ mod win_process {
             "OCM only supports the Windows process APIs".to_string(),
         ))
     }
+
+    pub fn current_process_elevated() -> Option<bool> {
+        None
+    }
 }
 
 /// Identidad física de un archivo en disco: la clave de invalidación
@@ -603,6 +638,10 @@ pub struct FileStat {
 pub struct Enricher;
 
 impl Enricher {
+    pub fn current_process_elevated() -> Option<bool> {
+        win_process::current_process_elevated()
+    }
+
     pub fn get_process_info(pid: u32, sys_map: &SystemProcessMap) -> ProcessInfo {
         if let Some(ctx) = sys_map.map.get(&pid) {
             let path_opt = if ctx.path.is_empty() {

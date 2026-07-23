@@ -8,14 +8,14 @@ use app_lib::core::storage::Storage;
 fn minimal_response(scan_id: &str, started_at: &str) -> ScanNowResponse {
     ScanNowResponse {
         scan_id: scan_id.to_string(),
-        schema_version: "v1".to_string(),
+        schema_version: "v2".to_string(),
         started_at: started_at.to_string(),
         finished_at: started_at.to_string(),
         duration_ms: 1500,
         host: HostInfo {
             platform: "windows".to_string(),
             hostname: "TEST-PC".to_string(),
-            app_version: "0.5.0".to_string(),
+            app_version: "1.0.0".to_string(),
         },
         summary: ScanSummary {
             total_observations: 1,
@@ -27,6 +27,45 @@ fn minimal_response(scan_id: &str, started_at: &str) -> ScanNowResponse {
             revalidation_count: 0,
             orphaned_count: 0,
         },
+        coverage: Some(ScanCoverage {
+            status: "complete".to_string(),
+            elevated: Some(true),
+            collector: CollectorCoverage {
+                tcp_ipv4_collected: true,
+                tcp_ipv6_collected: true,
+                tcp_observations: 1,
+                udp_ipv4_collected: true,
+                udp_ipv6_collected: true,
+                udp_owner_endpoints: 0,
+                udp_findings: 0,
+            },
+            process: ProcessCoverage {
+                findings: 1,
+                protected_system_findings: 0,
+                complete_context: 1,
+                path_resolved: 1,
+                user_resolved: 1,
+                command_line_resolved: 1,
+                parent_resolved: 1,
+            },
+            identity: IdentityCoverage {
+                complete_identity: 1,
+                hash_fresh: 1,
+                hash_cache: 0,
+                hash_unavailable: 0,
+                trust_resolved: 1,
+                trust_unknown: 0,
+            },
+            dns: DnsCoverage {
+                public_ip_candidates: 1,
+                cache_hits: 0,
+                resolved: 1,
+                no_ptr_record: 0,
+                timed_out: 0,
+            },
+            limitations: vec!["POINT_IN_TIME_SNAPSHOT".to_string()],
+            warnings: vec![],
+        }),
         findings: vec![Finding {
             finding_id: format!("FND-{}-0", scan_id),
             protocol: "TCP".to_string(),
@@ -145,6 +184,32 @@ fn scan_roundtrip_preserves_full_contract_payload() {
     assert_eq!(f.trust.signature_source, "catalog");
     assert_eq!(f.affinity.matched_signals, vec!["COMMON_PORT".to_string()]);
     assert_eq!(f.baseline.state, "Unknown");
+    assert_eq!(
+        restored
+            .coverage
+            .as_ref()
+            .map(|coverage| coverage.status.as_str()),
+        Some("complete")
+    );
+}
+
+#[test]
+fn historical_v1_scan_roundtrip_does_not_invent_coverage() {
+    let storage = Storage::new_in_memory().unwrap();
+    let mut response = minimal_response("SCAN-V1", "2026-07-09T10:30:00+00:00");
+    response.schema_version = "v1".to_string();
+    response.coverage = None;
+    storage.save_scan_results(&response).unwrap();
+
+    let restored = storage
+        .get_scan_response("SCAN-V1")
+        .expect("query ok")
+        .expect("historical scan must exist");
+
+    assert_eq!(restored.schema_version, "v1");
+    assert!(restored.coverage.is_none());
+    let serialized = serde_json::to_value(restored).unwrap();
+    assert!(serialized.get("coverage").is_none());
 }
 
 #[test]

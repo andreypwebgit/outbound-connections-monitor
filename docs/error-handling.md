@@ -51,6 +51,19 @@ El finding debe mantenerse con `intel.consulted = false` o con el subresultado d
 Registrar error técnico.
 Si no se puede persistir parte del resultado, el sistema debe intentar preservar al menos el resultado en memoria para la UI actual si ya existe.
 
+### 8. Representación de la degradación
+
+Cuando el scan puede continuar, `coverage` debe registrar el resultado de
+cada familia y etapa. La clasificación global sigue
+`docs/scan-completeness.md`:
+
+- `partial` para pérdida auxiliar o contextual;
+- `degraded` para pérdida de una familia TCP o identidad material de un
+  finding no protegido.
+
+La cobertura no cambia la banda de riesgo y nunca debe presentarse como
+porcentaje de seguridad.
+
 ## Reglas obligatorias
 
 - no usar errores silenciosos en lógica crítica;
@@ -73,6 +86,7 @@ Registrar al menos:
 - fallos de Intel externo;
 - errores de persistencia;
 - transiciones relevantes de estado.
+- estado final de cobertura, warnings y timeouts DNS.
 
 ## Regla final
 

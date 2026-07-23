@@ -7,11 +7,17 @@
 
 **Web oficial: [https://ocm.apwebai.es/](https://ocm.apwebai.es/)** — información del proyecto, guía de uso y descargas.
 
-Visibilidad humana y contexto técnico avanzado sobre conexiones salientes para sistemas Windows, diseñado para analistas de ciberseguridad y *Threat Hunters*.
+Analizador local y bajo demanda de conexiones salientes para Windows, estable,
+explicable y transparente sobre la cobertura real de cada escaneo.
 
-> **ℹ️ Nota sobre Windows SmartScreen:** los instaladores de OCM todavía no están firmados digitalmente con un certificado de código. Por eso, la primera vez que ejecutes el instalador (o la app), Windows mostrará el aviso *"Windows protegió tu PC"*. Es el comportamiento normal de SmartScreen con software nuevo sin firma, no una detección de amenaza. Para continuar: haz clic en **"Más información"** y después en **"Ejecutar de todas formas"**. Si prefieres no hacerlo, siempre puedes compilar la app desde este código fuente (ver más abajo).
+> **🔐 Releases oficiales v1:** el ejecutable, MSI y NSIS publicados por el
+> workflow de release se firman con Microsoft Artifact Signing, llevan sello
+> de tiempo y se verifican antes de publicarse. Cada release incluye SHA-256,
+> SBOM SPDX y attestation de procedencia. Comprueba siempre el editor y la
+> firma: SmartScreen puede seguir advirtiendo mientras la aplicación construye
+> reputación y una firma válida no convierte por sí sola un binario en seguro.
 
-## 🏗 Arquitectura Actual (v0.5)
+## 🏗 Arquitectura actual (v1.0)
 
 El proyecto está diseñado bajo estrictos requerimientos de simplicidad operativa, evitando la sobrecarga tecnológica ("bloatware"). Se rige por el principio de **Zero Trust** (Confianza Cero).
 
@@ -25,6 +31,10 @@ El proyecto está diseñado bajo estrictos requerimientos de simplicidad operati
     *   `Storage (SQLite)`: persistencia completa (scans, observaciones, identidades, trust, baseline, perfiles de afinidad, decisiones de riesgo, decisiones manuales y eventos de auditoría) con migraciones idempotentes.
     *   `Exporter`: exportación JSON (shape del contrato) y HTML autónomo, reproducibles desde el scan persistido.
     *   `Scan Diff`: consulta entre snapshots persistidos para conexiones nuevas/cambiadas, binarios nuevos y cambios de baseline, sin alterar el contrato `scan_now`.
+    *   `Coverage Engine`: mide qué familias y etapas del pipeline aportaron
+        evidencia, clasifica el snapshot como `complete`, `partial` o
+        `degraded` y expone limitaciones y warnings sin convertirlos en una
+        puntuación de seguridad.
 *   **Presentación / Desktop (Tauri 2):** Actúa como el puente ligero entre la interfaz gráfica y el sistema operativo, permitiendo un binario pequeño e independiente con comunicación asíncrona mediante eventos en tiempo real.
 *   **Frontend UI:** 
     *   HTML5 semántico y Vanilla JavaScript **ESM modular** (`api.js`, `state.js`, `render/*`). **Cero dependencias a frameworks SPA (React/Vue/Angular)**.
@@ -32,9 +42,16 @@ El proyecto está diseñado bajo estrictos requerimientos de simplicidad operati
 
 ---
 
-## ✨ Funcionalidades y Contexto Forense (v0.5)
+## ✨ Funcionalidades y contexto forense (v1.0)
 
 *   **Escaneo "On-Demand" con Feedback UX:** captura fotográfica de conexiones TCP con peer remoto verificable y enumeración técnica de endpoints UDP (Windows no expone su peer en esa API), con progreso asíncrono en la UI.
+*   **Panel de completitud del scan (v1.0):** muestra cobertura TCP/UDP por
+    familia, ejecución elevada, contexto de proceso, identidad/hash/trust,
+    resolución DNS, limitaciones inherentes y warnings. Es calidad de
+    evidencia, no una afirmación de que el equipo sea seguro.
+*   **Contrato `scan_now` v2:** incorpora el bloque `coverage`; los históricos
+    v1 continúan abriéndose y exportándose sin inventar cobertura
+    retrospectiva.
 *   **Collector nativo y rápido (v0.5):** conexiones y procesos se consultan mediante APIs de Windows. El DNS inverso corre en paralelo con presupuesto acotado; un smoke real con 48 findings y caché caliente completó el scan en **371 ms**.
 *   **Caché de identidad:** los hashes y firmas se reutilizan entre scans mientras el archivo no cambie (clave `volume_serial + file_id + file_size + last_write_time`); el contrato expone `hash_source: cache|fresh`. Un cambio de contenido activa revalidación automática del baseline.
 *   **Baseline por estados con decisiones manuales:** validación local de binarios (`Candidate → Observed_Local`) y aceptación de revalidaciones desde la propia UI, con auditoría persistida.
@@ -51,7 +68,14 @@ El proyecto está diseñado bajo estrictos requerimientos de simplicidad operati
 *   **Auditoría técnica:** eventos internos (`scan_started`, transiciones de baseline, errores de hash/persistencia, exports) quedan registrados en `audit_events`.
 *   **Filtro de búsqueda en hallazgos (v0.4.1):** filtrado instantáneo por proceso, IP, hostname, dominio, ruta o hash, combinable con los filtros de riesgo.
 *   **Mapeo MITRE ATT&CK (v0.4.1):** los reason codes con correspondencia rigurosa muestran sus técnicas (T1059, T1036.005, T1070.004…) enlazadas a attack.mitre.org.
-*   **Tests del dominio crítico:** 89 tests (contrato JSON, collector nativo, diff, scoring, transiciones de baseline, afinidad, caché de identidad, clasificación de rutas e integración SQLite), más `cargo fmt --check` y Clippy sin warnings en CI.
+*   **Supply chain de release (v1.0):** acciones fijadas por SHA, versiones
+    sincronizadas, auditoría npm, build y tests en Windows 2022, firma
+    Authenticode mediante OIDC, verificación obligatoria, checksums, SBOM y
+    attestation antes de publicar.
+*   **Tests del dominio crítico:** 101 tests (80 unitarios, 11 de contrato y
+    10 de integración SQLite), incluidos collector degradado, reglas de
+    completitud, exportación y compatibilidad histórica v1/v2; CI añade
+    `cargo fmt --check` y Clippy sin warnings.
 
 ---
 
@@ -102,10 +126,19 @@ Aunque OCM ya ofrece capacidades tácticas potentes, estas son algunas rutas par
 *   ✅ **Hecho en v0.5.0 — Gestión del baseline:** listado global y transiciones manuales válidas, incluida la revocación de `Observed_Local`.
 *   *Nota de diseño:* el "modo residente" (tray/ETW) que se contempló en versiones anteriores de este roadmap queda **descartado por diseño**: OCM es una herramienta de escaneo manual y no debe convertirse en daemon ni EDR (decisión cerrada del proyecto; ver [docs/product-vision.md](docs/product-vision.md)).
 
-### 5. Automatización del Build en CI
+### 5. Firma, build reproducible y supply chain
 *   ✅ **Hecho en v0.4.1** — cada push a `main` ejecuta la suite completa de tests en GitHub Actions, y cada tag `v*` compila los instaladores y publica la release con checksums automáticamente (ver [docs/build-and-distribution.md](docs/build-and-distribution.md)).
 *   ✅ **Endurecido en v0.5.0** — el CI exige formato Rust canónico y Clippy con warnings tratados como errores.
-*   Pendiente: **firma de código** de los instaladores para eliminar el aviso de SmartScreen (requiere certificado).
+*   ✅ **Hecho en v1.0.0** — tag exacto y manifiestos sincronizados, acciones
+    fijadas por commit, firma de ejecutable/MSI/NSIS con Microsoft Artifact
+    Signing y OIDC, verificación Authenticode, SBOM SPDX, checksums SHA-256 y
+    attestation de procedencia como gates obligatorios.
+
+### 6. Transparencia de cobertura
+*   ✅ **Hecho en v1.0.0** — panel y contrato de completitud de evidencia con
+    estados `complete`, `partial` y `degraded`, contadores por etapa,
+    limitaciones explícitas y compatibilidad fiel con históricos v1. Consulta
+    [docs/scan-completeness.md](docs/scan-completeness.md).
 
 ---
 

@@ -324,14 +324,14 @@ fn response_with(findings: Vec<Finding>) -> ScanNowResponse {
         .count() as u32;
     ScanNowResponse {
         scan_id: "SCAN-1751980800".to_string(),
-        schema_version: "v1".to_string(),
+        schema_version: "v2".to_string(),
         started_at: "2026-07-09T09:00:00+00:00".to_string(),
         finished_at: "2026-07-09T09:00:07+00:00".to_string(),
         duration_ms: 7000,
         host: HostInfo {
             platform: "windows".to_string(),
             hostname: "TEST-PC".to_string(),
-            app_version: "0.5.0".to_string(),
+            app_version: "1.0.0".to_string(),
         },
         summary: ScanSummary {
             total_observations: findings.len() as u32,
@@ -343,6 +343,92 @@ fn response_with(findings: Vec<Finding>) -> ScanNowResponse {
             revalidation_count: 0,
             orphaned_count: findings.iter().filter(|f| f.process.orphaned).count() as u32,
         },
+        coverage: Some(ScanCoverage {
+            status: if findings.iter().any(|f| f.process.orphaned) {
+                "degraded"
+            } else {
+                "complete"
+            }
+            .to_string(),
+            elevated: Some(true),
+            collector: CollectorCoverage {
+                tcp_ipv4_collected: true,
+                tcp_ipv6_collected: true,
+                tcp_observations: findings.len() as u32,
+                udp_ipv4_collected: true,
+                udp_ipv6_collected: true,
+                udp_owner_endpoints: 2,
+                udp_findings: 0,
+            },
+            process: ProcessCoverage {
+                findings: findings.len() as u32,
+                protected_system_findings: 0,
+                complete_context: findings
+                    .iter()
+                    .filter(|f| {
+                        f.process.path.is_some()
+                            && f.process.user.is_some()
+                            && f.process.command_line.is_some()
+                            && f.process.ppid.is_some()
+                            && f.process.parent_name.is_some()
+                    })
+                    .count() as u32,
+                path_resolved: findings.iter().filter(|f| f.process.path.is_some()).count() as u32,
+                user_resolved: findings.iter().filter(|f| f.process.user.is_some()).count() as u32,
+                command_line_resolved: findings
+                    .iter()
+                    .filter(|f| f.process.command_line.is_some())
+                    .count() as u32,
+                parent_resolved: findings
+                    .iter()
+                    .filter(|f| f.process.ppid.is_some() && f.process.parent_name.is_some())
+                    .count() as u32,
+            },
+            identity: IdentityCoverage {
+                complete_identity: findings
+                    .iter()
+                    .filter(|f| f.binary_identity.sha256.is_some())
+                    .count() as u32,
+                hash_fresh: findings
+                    .iter()
+                    .filter(|f| f.binary_identity.hash_source.as_deref() == Some("fresh"))
+                    .count() as u32,
+                hash_cache: findings
+                    .iter()
+                    .filter(|f| f.binary_identity.hash_source.as_deref() == Some("cache"))
+                    .count() as u32,
+                hash_unavailable: findings
+                    .iter()
+                    .filter(|f| f.binary_identity.sha256.is_none())
+                    .count() as u32,
+                trust_resolved: findings
+                    .iter()
+                    .filter(|f| f.trust.signature_status != "Unknown")
+                    .count() as u32,
+                trust_unknown: findings
+                    .iter()
+                    .filter(|f| f.trust.signature_status == "Unknown")
+                    .count() as u32,
+            },
+            dns: DnsCoverage {
+                public_ip_candidates: findings.len() as u32,
+                cache_hits: 0,
+                resolved: findings
+                    .iter()
+                    .filter(|f| f.remote.hostname.is_some())
+                    .count() as u32,
+                no_ptr_record: findings
+                    .iter()
+                    .filter(|f| f.remote.hostname.is_none())
+                    .count() as u32,
+                timed_out: 0,
+            },
+            limitations: vec![
+                "POINT_IN_TIME_SNAPSHOT".to_string(),
+                "UDP_REMOTE_PEER_NOT_AVAILABLE".to_string(),
+            ],
+            warnings: vec![],
+        }),
         findings,
     }
 }
@@ -424,4 +510,40 @@ fn validator_rejects_missing_required_top_level_field() {
     assert!(errors
         .iter()
         .any(|e| e.contains("missing required property 'summary'")));
+}
+
+#[test]
+fn validator_rejects_invalid_coverage_status() {
+    let contract = load_contract();
+    let mut response = response_with(vec![full_finding()]);
+    response.coverage.as_mut().unwrap().status = "secure".to_string();
+    let value = serde_json::to_value(response).unwrap();
+    let mut errors = Vec::new();
+    validate(&value, &contract, "$", &mut errors);
+    assert!(errors.iter().any(|e| e.contains("coverage.status")));
+}
+
+#[test]
+fn validator_requires_coverage_in_schema_v2() {
+    let contract = load_contract();
+    let mut value = serde_json::to_value(response_with(vec![])).unwrap();
+    value.as_object_mut().unwrap().remove("coverage");
+    let mut errors = Vec::new();
+    validate(&value, &contract, "$", &mut errors);
+    assert!(errors
+        .iter()
+        .any(|e| e.contains("missing required property 'coverage'")));
+}
+
+#[test]
+fn historical_v1_payload_deserializes_without_invented_coverage() {
+    let mut value = serde_json::to_value(response_with(vec![])).unwrap();
+    value["schema_version"] = Value::String("v1".to_string());
+    value.as_object_mut().unwrap().remove("coverage");
+
+    let response: ScanNowResponse = serde_json::from_value(value).unwrap();
+    assert_eq!(response.schema_version, "v1");
+    assert!(response.coverage.is_none());
+    let reserialized = serde_json::to_value(response).unwrap();
+    assert!(reserialized.get("coverage").is_none());
 }

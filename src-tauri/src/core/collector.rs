@@ -29,9 +29,14 @@ pub struct RawObservation {
 
 /// Resultado del snapshot nativo. Los avisos permiten degradar por familia
 /// (por ejemplo, conservar IPv4 si la tabla IPv6 falla) sin ocultar el error.
+#[derive(Debug)]
 pub struct CollectionResult {
     pub observations: Vec<RawObservation>,
     pub warnings: Vec<String>,
+    pub tcp_ipv4_collected: bool,
+    pub tcp_ipv6_collected: bool,
+    pub udp_ipv4_collected: bool,
+    pub udp_ipv6_collected: bool,
     /// Endpoints UDP con PID observados. No se convierten en findings porque
     /// GetExtendedUdpTable no expone el peer remoto y no se inventan datos.
     pub udp_endpoint_count: u32,
@@ -41,41 +46,63 @@ pub struct Collector;
 
 impl Collector {
     pub fn collect_active_connections() -> Result<CollectionResult, AppError> {
-        let mut observations = Vec::new();
-        let mut warnings = Vec::new();
-        let mut tcp_tables_ok = 0u8;
-
-        for family in [AF_INET, AF_INET6] {
-            match collect_tcp_family(family) {
-                Ok(mut rows) => {
-                    tcp_tables_ok += 1;
-                    observations.append(&mut rows);
-                }
-                Err(error) => warnings.push(error),
-            }
-        }
-
-        if tcp_tables_ok == 0 {
-            return Err(AppError::CollectorError(format!(
-                "GetExtendedTcpTable failed for IPv4 and IPv6: {}",
-                warnings.join("; ")
-            )));
-        }
-
-        let mut udp_endpoint_count = 0u32;
-        for family in [AF_INET, AF_INET6] {
-            match count_udp_endpoints(family) {
-                Ok(count) => udp_endpoint_count = udp_endpoint_count.saturating_add(count),
-                Err(error) => warnings.push(error),
-            }
-        }
-
-        Ok(CollectionResult {
-            observations,
-            warnings,
-            udp_endpoint_count,
-        })
+        assemble_collection(
+            collect_tcp_family(AF_INET),
+            collect_tcp_family(AF_INET6),
+            count_udp_endpoints(AF_INET),
+            count_udp_endpoints(AF_INET6),
+        )
     }
+}
+
+fn assemble_collection(
+    tcp_ipv4: Result<Vec<RawObservation>, String>,
+    tcp_ipv6: Result<Vec<RawObservation>, String>,
+    udp_ipv4: Result<u32, String>,
+    udp_ipv6: Result<u32, String>,
+) -> Result<CollectionResult, AppError> {
+    let tcp_ipv4_collected = tcp_ipv4.is_ok();
+    let tcp_ipv6_collected = tcp_ipv6.is_ok();
+    let udp_ipv4_collected = udp_ipv4.is_ok();
+    let udp_ipv6_collected = udp_ipv6.is_ok();
+    let mut warnings = Vec::new();
+    let mut observations = Vec::new();
+
+    match tcp_ipv4 {
+        Ok(mut rows) => observations.append(&mut rows),
+        Err(error) => warnings.push(error),
+    }
+    match tcp_ipv6 {
+        Ok(mut rows) => observations.append(&mut rows),
+        Err(error) => warnings.push(error),
+    }
+
+    if !tcp_ipv4_collected && !tcp_ipv6_collected {
+        return Err(AppError::CollectorError(format!(
+            "GetExtendedTcpTable failed for IPv4 and IPv6: {}",
+            warnings.join("; ")
+        )));
+    }
+
+    let mut udp_endpoint_count = 0u32;
+    match udp_ipv4 {
+        Ok(count) => udp_endpoint_count = udp_endpoint_count.saturating_add(count),
+        Err(error) => warnings.push(error),
+    }
+    match udp_ipv6 {
+        Ok(count) => udp_endpoint_count = udp_endpoint_count.saturating_add(count),
+        Err(error) => warnings.push(error),
+    }
+
+    Ok(CollectionResult {
+        observations,
+        warnings,
+        tcp_ipv4_collected,
+        tcp_ipv6_collected,
+        udp_ipv4_collected,
+        udp_ipv6_collected,
+        udp_endpoint_count,
+    })
 }
 
 fn collect_tcp_family(family: u32) -> Result<Vec<RawObservation>, String> {
@@ -409,5 +436,43 @@ mod tests {
         let buffer = Vec::from(2u32.to_ne_bytes());
         let error = parse_tcp_v4_table(&buffer).unwrap_err();
         assert!(error.contains("truncated"));
+    }
+
+    #[test]
+    fn collection_reports_each_family_without_hiding_partial_failure() {
+        let result = assemble_collection(
+            Ok(vec![RawObservation {
+                protocol: "TCP".to_string(),
+                state: "ESTABLISHED".to_string(),
+                local_ip: "192.168.1.2".to_string(),
+                local_port: 50_000,
+                remote_ip: "1.1.1.1".to_string(),
+                remote_port: 443,
+                pid: 42,
+            }]),
+            Err("IPv6 unavailable".to_string()),
+            Ok(3),
+            Err("UDP IPv6 unavailable".to_string()),
+        )
+        .unwrap();
+
+        assert!(result.tcp_ipv4_collected);
+        assert!(!result.tcp_ipv6_collected);
+        assert!(result.udp_ipv4_collected);
+        assert!(!result.udp_ipv6_collected);
+        assert_eq!(result.udp_endpoint_count, 3);
+        assert_eq!(result.warnings.len(), 2);
+    }
+
+    #[test]
+    fn collection_fails_only_when_both_tcp_families_fail() {
+        let error = assemble_collection(
+            Err("IPv4 unavailable".to_string()),
+            Err("IPv6 unavailable".to_string()),
+            Ok(0),
+            Ok(0),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("IPv4 and IPv6"));
     }
 }

@@ -71,6 +71,17 @@ Validar parsing binario de tablas TCP, filtros de estado, deduplicación del
 diff, selección cronológica del scan anterior y proyecciones/acciones de la
 vista de baseline.
 
+### 9. Completitud y compatibilidad
+
+Validar:
+- clasificación `complete`, `partial` y `degraded`;
+- fallos independientes de familias TCP/UDP;
+- métricas de proceso, identidad, trust y DNS;
+- exportación UI/HTML con valores escapados;
+- contrato v2 con `coverage` obligatorio;
+- lectura, persistencia y exportación de históricos v1 sin cobertura
+  inventada.
+
 ## Escenarios mínimos obligatorios
 
 1. proceso firmado, hash conocido y destino habitual;
@@ -100,8 +111,9 @@ vista de baseline.
   dependencias) y `src-tauri/tests/storage_test.rs` (SQLite end-to-end).
 - Ejecución: `cargo test` dentro de `src-tauri/`.
 
-Suite v0.5.1: **89 tests** (72 unitarios + 8 de contrato + 9 de integración
-SQLite). CI ejecuta además `cargo fmt --check` y
+Suite v1.0.0: **101 tests** (80 unitarios + 11 de contrato + 10 de
+integración SQLite). CI ejecuta además validación de versiones, auditoría npm,
+build de Tailwind, `cargo fmt --check` y
 `cargo clippy --locked --all-targets -- -D warnings`.
 
 Los mocks de VirusTotal/AbuseIPDB quedan pendientes de que exista el bloque

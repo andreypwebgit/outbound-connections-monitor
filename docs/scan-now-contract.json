@@ -12,6 +12,7 @@
     "duration_ms",
     "host",
     "summary",
+    "coverage",
     "findings"
   ],
   "properties": {
@@ -20,7 +21,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "v1"
+      "const": "v2"
     },
     "started_at": {
       "type": "string",
@@ -73,6 +74,119 @@
         "candidate_count": { "type": "integer", "minimum": 0 },
         "revalidation_count": { "type": "integer", "minimum": 0 },
         "orphaned_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "elevated",
+        "collector",
+        "process",
+        "identity",
+        "dns",
+        "limitations",
+        "warnings"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["complete", "partial", "degraded"]
+        },
+        "elevated": {
+          "type": ["boolean", "null"]
+        },
+        "collector": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "tcp_ipv4_collected",
+            "tcp_ipv6_collected",
+            "tcp_observations",
+            "udp_ipv4_collected",
+            "udp_ipv6_collected",
+            "udp_owner_endpoints",
+            "udp_findings"
+          ],
+          "properties": {
+            "tcp_ipv4_collected": { "type": "boolean" },
+            "tcp_ipv6_collected": { "type": "boolean" },
+            "tcp_observations": { "type": "integer", "minimum": 0 },
+            "udp_ipv4_collected": { "type": "boolean" },
+            "udp_ipv6_collected": { "type": "boolean" },
+            "udp_owner_endpoints": { "type": "integer", "minimum": 0 },
+            "udp_findings": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "process": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "findings",
+            "protected_system_findings",
+            "complete_context",
+            "path_resolved",
+            "user_resolved",
+            "command_line_resolved",
+            "parent_resolved"
+          ],
+          "properties": {
+            "findings": { "type": "integer", "minimum": 0 },
+            "protected_system_findings": { "type": "integer", "minimum": 0 },
+            "complete_context": { "type": "integer", "minimum": 0 },
+            "path_resolved": { "type": "integer", "minimum": 0 },
+            "user_resolved": { "type": "integer", "minimum": 0 },
+            "command_line_resolved": { "type": "integer", "minimum": 0 },
+            "parent_resolved": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "complete_identity",
+            "hash_fresh",
+            "hash_cache",
+            "hash_unavailable",
+            "trust_resolved",
+            "trust_unknown"
+          ],
+          "properties": {
+            "complete_identity": { "type": "integer", "minimum": 0 },
+            "hash_fresh": { "type": "integer", "minimum": 0 },
+            "hash_cache": { "type": "integer", "minimum": 0 },
+            "hash_unavailable": { "type": "integer", "minimum": 0 },
+            "trust_resolved": { "type": "integer", "minimum": 0 },
+            "trust_unknown": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "dns": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "public_ip_candidates",
+            "cache_hits",
+            "resolved",
+            "no_ptr_record",
+            "timed_out"
+          ],
+          "properties": {
+            "public_ip_candidates": { "type": "integer", "minimum": 0 },
+            "cache_hits": { "type": "integer", "minimum": 0 },
+            "resolved": { "type": "integer", "minimum": 0 },
+            "no_ptr_record": { "type": "integer", "minimum": 0 },
+            "timed_out": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
       }
     },
     "findings": {

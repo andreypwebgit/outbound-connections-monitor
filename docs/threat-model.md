@@ -2,7 +2,9 @@
 
 ## Alcance del modelo de amenaza
 
-La v0.1 está diseñada para priorizar hallazgos sospechosos relacionados con conexiones salientes activas visibles en Windows. No pretende cubrir toda la superficie de amenazas del host.
+OCM está diseñado para priorizar hallazgos sospechosos relacionados con
+conexiones salientes activas visibles en Windows. No pretende cubrir toda la
+superficie de amenazas del host.
 
 ## Amenazas que sí intenta iluminar
 
@@ -23,7 +25,7 @@ La v0.1 está diseñada para priorizar hallazgos sospechosos relacionados con co
 - exfiltración simple observable desde procesos no esperados;
 - abuso de herramientas firmadas con comportamiento poco coherente.
 
-## Amenazas que no cubre bien en v0.1
+## Amenazas que no cubre bien
 
 - inyección en memoria sin señales visibles suficientes;
 - kernel malware;
@@ -68,3 +70,5 @@ La v0.1 está diseñada para priorizar hallazgos sospechosos relacionados con co
 - afinidad de red en vez de IP fija;
 - clasificación sobria y explicable;
 - procesos huérfanos como hallazgos críticos.
+- panel de completitud que separa cobertura de evidencia y riesgo, evitando
+  aparentar certeza cuando el collector o el enriquecimiento degradan.

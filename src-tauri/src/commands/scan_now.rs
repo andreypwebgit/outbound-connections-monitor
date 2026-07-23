@@ -8,13 +8,14 @@ use tauri::{command, Emitter};
 
 use crate::core::affinity::{extract_root_domain, is_private_ip, AffinityContext, AffinityEngine};
 use crate::core::baseline_manager::{BaselineManager, BaselineObservation};
-use crate::core::collector::{Collector, RawObservation};
+use crate::core::collector::{CollectionResult, Collector, RawObservation};
+use crate::core::coverage::{CoverageEngine, CoverageSignals};
 use crate::core::enricher::{Enricher, SystemProcessMap};
 use crate::core::exporter::Exporter;
 use crate::core::identity_cache::IdentityCache;
 use crate::core::models::{
-    AbuseIpdbIntel, AffinityLevel, BaselineInfo, Finding, HostInfo, IntelInfo, LlmIntel,
-    LocalEndpoint, RemoteEndpoint, RiskInfo, ScanNowResponse, ScanSummary, VtIntel,
+    AbuseIpdbIntel, AffinityLevel, BaselineInfo, DnsCoverage, Finding, HostInfo, IntelInfo,
+    LlmIntel, LocalEndpoint, RemoteEndpoint, RiskInfo, ScanNowResponse, ScanSummary, VtIntel,
 };
 use crate::core::risk_engine::{RiskContext, RiskEngine};
 use crate::core::storage::Storage;
@@ -54,11 +55,19 @@ pub async fn scan_now(
         let _ = state.record_audit_event(Some(&scan_id), "collector_error", &e.to_string());
         e.to_string()
     })?;
-    for warning in &collection.warnings {
+    let CollectionResult {
+        observations: raw_observations,
+        warnings: collector_warnings,
+        tcp_ipv4_collected,
+        tcp_ipv6_collected,
+        udp_ipv4_collected,
+        udp_ipv6_collected,
+        udp_endpoint_count,
+    } = collection;
+    for warning in &collector_warnings {
         let _ = state.record_audit_event(Some(&scan_id), "collector_warning", warning);
         log::warn!("native connection collection degraded: {}", warning);
     }
-    let raw_observations = collection.observations;
 
     let _ = state.record_audit_event(
         Some(&scan_id),
@@ -66,14 +75,14 @@ pub async fn scan_now(
         &format!(
             "{} TCP observations and {} UDP owner endpoints",
             raw_observations.len(),
-            collection.udp_endpoint_count
+            udp_endpoint_count
         ),
     );
 
     let mut identity_cache = IdentityCache::new();
     // DNS inverso paralelo con presupuesto total acotado. Las resoluciones
     // que terminan más tarde quedan cacheadas para el próximo scan.
-    let dns_memo = resolve_hostnames(&raw_observations);
+    let dns_result = resolve_hostnames(&raw_observations);
     // Baseline: una evaluación por binario y por scan.
     let mut baseline_memo: HashMap<String, (BaselineInfo, bool, Option<String>)> = HashMap::new();
     // Los perfiles de afinidad del scan se registran al FINAL para que un
@@ -106,7 +115,7 @@ pub async fn scan_now(
         };
 
         // --- DNS inverso (memoizado por IP; solo IPs públicas) ----------
-        let hostname = dns_memo.get(&obs.remote_ip).cloned().flatten();
+        let hostname = dns_result.hostnames.get(&obs.remote_ip).cloned().flatten();
 
         let root_domain = hostname.as_deref().and_then(extract_root_domain);
 
@@ -306,10 +315,34 @@ pub async fn scan_now(
 
     let finished_at: DateTime<Utc> = Utc::now();
     let duration_ms = start_time.elapsed().unwrap_or_default().as_millis() as u64;
+    let coverage = CoverageEngine::evaluate(
+        CoverageSignals {
+            elevated: Enricher::current_process_elevated(),
+            tcp_ipv4_collected,
+            tcp_ipv6_collected,
+            udp_ipv4_collected,
+            udp_ipv6_collected,
+            udp_owner_endpoints: udp_endpoint_count,
+            collector_warnings: &collector_warnings,
+            enricher_warnings: &process_map.warnings,
+            dns: dns_result.coverage,
+        },
+        &findings,
+    );
+    let _ = state.record_audit_event(
+        Some(&scan_id),
+        "scan_coverage",
+        &format!(
+            "status={}, warnings={}, dns_timeouts={}",
+            coverage.status,
+            coverage.warnings.len(),
+            coverage.dns.timed_out
+        ),
+    );
 
     let response = ScanNowResponse {
         scan_id: scan_id.clone(),
-        schema_version: "v1".to_string(),
+        schema_version: "v2".to_string(),
         started_at: started_at.to_rfc3339(),
         finished_at: finished_at.to_rfc3339(),
         duration_ms,
@@ -319,6 +352,7 @@ pub async fn scan_now(
             app_version: env!("CARGO_PKG_VERSION").to_string(),
         },
         summary,
+        coverage: Some(coverage),
         findings,
     };
 
@@ -347,15 +381,28 @@ pub async fn scan_now(
 const DNS_RESOLUTION_BUDGET: Duration = Duration::from_millis(200);
 static DNS_CACHE: OnceLock<Mutex<HashMap<String, Option<String>>>> = OnceLock::new();
 
-fn resolve_hostnames(observations: &[RawObservation]) -> HashMap<String, Option<String>> {
+struct DnsResolutionResult {
+    hostnames: HashMap<String, Option<String>>,
+    coverage: DnsCoverage,
+}
+
+fn resolve_hostnames(observations: &[RawObservation]) -> DnsResolutionResult {
     let cache = DNS_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut results = HashMap::new();
     let mut pending = Vec::new();
+    let mut coverage = DnsCoverage::default();
 
     let public_ips = public_ips_to_resolve(observations);
+    coverage.public_ip_candidates = public_ips.len() as u32;
     if let Ok(cached) = cache.lock() {
         for ip in public_ips {
             if let Some(hostname) = cached.get(&ip) {
+                coverage.cache_hits += 1;
+                if hostname.is_some() {
+                    coverage.resolved += 1;
+                } else {
+                    coverage.no_ptr_record += 1;
+                }
                 results.insert(ip, hostname.clone());
             } else {
                 pending.push(ip);
@@ -366,6 +413,7 @@ fn resolve_hostnames(observations: &[RawObservation]) -> HashMap<String, Option<
     }
 
     let (sender, receiver) = mpsc::channel();
+    let pending_count = pending.len() as u32;
     for ip_text in pending {
         let sender = sender.clone();
         std::thread::spawn(move || {
@@ -381,17 +429,28 @@ fn resolve_hostnames(observations: &[RawObservation]) -> HashMap<String, Option<
     }
     drop(sender);
 
+    let mut completed = 0u32;
     let deadline = Instant::now() + DNS_RESOLUTION_BUDGET;
     while let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
         match receiver.recv_timeout(remaining) {
             Ok((ip, hostname)) => {
+                completed += 1;
+                if hostname.is_some() {
+                    coverage.resolved += 1;
+                } else {
+                    coverage.no_ptr_record += 1;
+                }
                 results.insert(ip, hostname);
             }
             Err(mpsc::RecvTimeoutError::Timeout | mpsc::RecvTimeoutError::Disconnected) => break,
         }
     }
+    coverage.timed_out = pending_count.saturating_sub(completed);
 
-    results
+    DnsResolutionResult {
+        hostnames: results,
+        coverage,
+    }
 }
 
 fn public_ips_to_resolve(observations: &[RawObservation]) -> HashSet<String> {

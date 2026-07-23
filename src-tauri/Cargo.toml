@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.5.1"
+version = "1.0.0"
 description = "Outbound Connections Monitor: escaneo manual de conexiones salientes con baseline, afinidad y riesgo explicable"
 authors = ["APWebAI"]
 license = "MIT"

@@ -2,9 +2,9 @@
 
 ## Objetivo
 
-Definir qué se exporta y con qué nivel de detalle en v0.1.
+Definir qué se exporta y con qué nivel de detalle.
 
-## Formatos soportados en v0.1
+## Formatos soportados
 
 - JSON
 - HTML
@@ -25,6 +25,7 @@ El JSON exportado debe respetar el mismo shape base definido en `docs/scan-now-c
 
 - metadatos del scan;
 - summary;
+- cobertura y limitaciones del snapshot en contratos v2;
 - findings completos;
 - baseline state;
 - affinity;
@@ -48,6 +49,8 @@ Proporcionar una vista legible y compartible por humanos.
 - proceso, ruta y destino;
 - reason codes principales;
 - recomendación.
+- estado, métricas, limitaciones y warnings de cobertura cuando estén
+  disponibles.
 
 ## Reglas obligatorias
 
@@ -56,6 +59,8 @@ Proporcionar una vista legible y compartible por humanos.
 - exportar no debe inventar campos ausentes;
 - exportar debe marcar valores no resueltos como `null`, `unknown` o equivalente claro;
 - exportar debe ser reproducible a partir del resultado persistido del scan.
+- un histórico v1 debe declarar que la cobertura no está disponible, sin
+  inferirla.
 
 ## Qué no hacer
 

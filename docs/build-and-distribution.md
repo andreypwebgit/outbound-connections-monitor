@@ -5,23 +5,56 @@ distribuirlos a equipos que no tienen herramientas de desarrollo.
 
 ## Releases automáticas (CI)
 
-Desde v0.4.1 la vía recomendada es el pipeline de GitHub Actions:
+La vía oficial es el pipeline de GitHub Actions:
 
 - **`.github/workflows/ci.yml`** — en cada push/PR a `main` compila Tailwind,
   exige `cargo fmt --check`, ejecuta Clippy con warnings como error y lanza la
   suite completa de tests en un runner Windows.
-- **`.github/workflows/release.yml`** — al empujar un tag `v*` ejecuta los
-  tests, compila los instaladores (`npx tauri build`), genera
-  `checksums.txt` (SHA-256) y **publica la release de GitHub** con los tres
-  archivos adjuntos y notas generadas a partir de los commits.
+- **`.github/workflows/release.yml`** — un tag `vX.Y.Z` exacto valida las
+  cuatro versiones, ejecuta los mismos gates y delega la firma en el
+  `signCommand` de Tauri: cada ejecutable se firma después de adaptar sus
+  recursos al bundle y antes de incorporarlo al MSI/NSIS; los instaladores se
+  firman al finalizar. Después verifica todas las firmas y publica ejecutable,
+  MSI, NSIS,
+  `checksums.txt`, SBOM SPDX y attestation de procedencia.
+
+Las acciones de terceros están fijadas por SHA completo y Dependabot propone
+sus actualizaciones. Los runners son `windows-2022`, Node está fijado a la
+línea 20 y las dependencias Rust/npm quedan cerradas por `Cargo.lock` y
+`package-lock.json`.
 
 Publicar una versión nueva se reduce a:
 
 ```powershell
-# actualizar version en src-tauri/Cargo.toml y src-tauri/tauri.conf.json
+# sincronizar Cargo.toml, tauri.conf.json, package.json y package-lock.json
+.\scripts\validate-release.ps1 -Tag vX.Y.Z
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
+
+No debe crearse el tag hasta que CI esté verde y el entorno protegido
+`release` tenga configurada la firma. Un fallo de test, firma, SBOM,
+attestation o publicación detiene el workflow.
+
+## Configuración de firma de la release
+
+La release usa Microsoft Artifact Signing con federación OIDC; no guarda una
+clave privada ni un PFX en GitHub. El entorno GitHub `release` requiere:
+
+Secrets:
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+
+Variables:
+- `ARTIFACT_SIGNING_ENDPOINT`
+- `ARTIFACT_SIGNING_ACCOUNT`
+- `ARTIFACT_SIGNING_CERTIFICATE_PROFILE`
+
+La identidad federada debe poder autenticarse desde este repositorio y tener
+el rol **Artifact Signing Certificate Profile Signer** sobre el perfil. El
+workflow necesita `id-token: write`; las demás credenciales no se imprimen ni
+se incorporan a los artefactos.
 
 El build local descrito a continuación sigue siendo válido para desarrollo
 y verificación manual.
@@ -61,7 +94,7 @@ exactos. Rutas:
 |---|---|---|
 | Instalador MSI (WiX) | `src-tauri/target/release/bundle/msi/*.msi` | Instalación clásica / despliegue corporativo (GPO, Intune) |
 | Instalador NSIS | `src-tauri/target/release/bundle/nsis/*-setup.exe` | Instalador ligero de doble clic (recomendado para usuarios finales) |
-| Ejecutable suelto | `src-tauri/target/release/out-cxns-monitor.exe` | Solo para pruebas: funciona con doble clic pero **no** instala WebView2 ni crea accesos directos |
+| Ejecutable suelto | `src-tauri/target/release/app.exe` | Solo para pruebas: funciona con doble clic pero **no** instala WebView2 ni crea accesos directos; la release lo publica como `out-cxns-monitor.exe` |
 
 Cualquiera de los dos instaladores cumple el objetivo de distribución: el
 usuario hace doble clic, instala y ejecuta sin Rust/Node.
@@ -98,13 +131,34 @@ independientes. La primera ejecución en un equipo nuevo empieza con baseline
 vacío (todo aparecerá como `Unknown`, es el comportamiento esperado del
 modelo).
 
-## SmartScreen y firma de código
+## Firma, SmartScreen y verificación
 
-Los artefactos **no están firmados** con certificado de código. Windows
-SmartScreen mostrará "Windows protegió tu PC" la primera vez: el usuario debe
-pulsar *Más información → Ejecutar de todas formas*. Para distribución amplia,
-el paso pendiente es firmar con un certificado (EV) de código, fuera del
-alcance actual.
+Las releases oficiales v1 integran Microsoft Artifact Signing en el
+`signCommand` de Tauri. Así el `.exe` se firma después del parcheo de recursos
+que identifica cada tipo de bundle y antes de quedar embebido; MSI y NSIS se
+firman una vez generados. Todas las firmas usan SHA-256 y sello de tiempo
+RFC 3161. `verify-signatures.ps1` exige estado Authenticode `Valid` antes de
+publicar.
+
+La firma aporta identidad e integridad, pero no garantiza que SmartScreen no
+muestre advertencias: la reputación del editor y del archivo también influye.
+No debe recomendarse ignorar una advertencia sin comprobar antes el origen.
+
+Verificación local:
+
+```powershell
+Get-AuthenticodeSignature .\out-cxns-monitor.exe |
+  Select-Object Status, StatusMessage, SignerCertificate
+Get-FileHash .\out-cxns-monitor.exe -Algorithm SHA256
+```
+
+El hash debe coincidir con `checksums.txt`. Con GitHub CLI también puede
+verificarse la procedencia:
+
+```powershell
+gh attestation verify .\out-cxns-monitor.exe `
+  --repo andreypwebgit/outbound-connections-monitor
+```
 
 ## Desinstalación
 
@@ -145,3 +199,15 @@ Smoke test v0.5.1 realizado el 2026-07-23 con `npx tauri dev`: compilación
 debug correcta, `target/debug/app.exe` iniciado y ventana WebView2
 `Outbound Connections Monitor` operativa. La instancia de desarrollo se
 cerró de forma controlada después de la comprobación.
+
+Validación local v1.0.0 realizada el 2026-07-23:
+
+- `npx tauri build --no-bundle --ci`: exit code 0 y
+  `target/release/app.exe` generado;
+- `npx tauri bundle --bundles nsis --ci`: NSIS 1.0.0 generado;
+- `npx tauri dev`: watcher iniciado, compilación debug, `target/debug/app.exe`
+  mantenido en ejecución durante el smoke y cierre controlado;
+- el bundle MSI local requiere que la característica opcional VBSCRIPT de
+  Windows esté habilitada. La release oficial se construye en
+  `windows-2022`, donde el workflow debe producir y verificar ambos formatos
+  antes de publicar.

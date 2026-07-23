@@ -37,6 +37,7 @@ impl Exporter {
 
     pub fn render_html(response: &ScanNowResponse) -> String {
         let s = &response.summary;
+        let coverage_html = Self::render_coverage(response);
         let mut findings_html = String::new();
         for finding in &response.findings {
             findings_html.push_str(&Self::render_finding(finding));
@@ -68,6 +69,12 @@ impl Exporter {
   .summary-item span {{ display: block; }}
   .summary-item .label {{ font-size: 0.7rem; text-transform: uppercase; color: #6b7280; }}
   .summary-item .value {{ font-size: 1.15rem; font-weight: 600; }}
+  .coverage {{ border: 1px solid #d1d5db; border-radius: 0.4rem; padding: 0.9rem; }}
+  .coverage-complete {{ border-left: 0.35rem solid #15803d; }}
+  .coverage-partial {{ border-left: 0.35rem solid #a16207; }}
+  .coverage-degraded {{ border-left: 0.35rem solid #b91c1c; }}
+  .coverage-legacy {{ border-left: 0.35rem solid #6b7280; }}
+  .coverage ul {{ margin: 0.4rem 0 0; }}
   .reasons {{ margin: 0; padding-left: 1.1rem; }}
 </style>
 </head>
@@ -89,6 +96,8 @@ impl Exporter {
   <div class="summary-item"><span class="label">Revalidación</span><span class="value">{revalidation}</span></div>
   <div class="summary-item"><span class="label">Huérfanos</span><span class="value">{orphaned}</span></div>
 </div>
+
+{coverage}
 
 <h2>Hallazgos ({findings_count})</h2>
 <table>
@@ -125,8 +134,91 @@ impl Exporter {
             candidate = s.candidate_count,
             revalidation = s.revalidation_count,
             orphaned = s.orphaned_count,
+            coverage = coverage_html,
             findings_count = response.findings.len(),
             findings = findings_html,
+        )
+    }
+
+    fn render_coverage(response: &ScanNowResponse) -> String {
+        let Some(coverage) = &response.coverage else {
+            return r#"<h2>Completitud del scan</h2>
+<div class="coverage coverage-legacy">
+  <strong>No disponible</strong>
+  <p class="meta">Este scan histórico usa un esquema anterior que no registraba cobertura. No se infiere información retrospectiva.</p>
+</div>"#
+                .to_string();
+        };
+
+        let elevated = match coverage.elevated {
+            Some(true) => "sí",
+            Some(false) => "no",
+            None => "no resuelto",
+        };
+        let limitations = coverage
+            .limitations
+            .iter()
+            .map(|item| format!("<li>{}</li>", escape_html(item)))
+            .collect::<Vec<_>>()
+            .join("");
+        let warnings = if coverage.warnings.is_empty() {
+            "<li>Ninguna advertencia técnica.</li>".to_string()
+        } else {
+            coverage
+                .warnings
+                .iter()
+                .map(|item| format!("<li>{}</li>", escape_html(item)))
+                .collect::<Vec<_>>()
+                .join("")
+        };
+
+        format!(
+            r#"<h2>Completitud del scan</h2>
+<div class="coverage coverage-{status}">
+  <strong>Estado de evidencia: {status}</strong>
+  <p class="meta">Ejecución elevada: {elevated}. Este estado describe cobertura, no el nivel de seguridad del equipo.</p>
+  <table>
+    <tbody>
+      <tr><th>Collector</th><td>TCP IPv4: {tcp4} · TCP IPv6: {tcp6} · observaciones TCP: {tcp_total}<br>UDP IPv4: {udp4} · UDP IPv6: {udp6} · endpoints owner: {udp_endpoints} · findings UDP: {udp_findings}</td></tr>
+      <tr><th>Procesos</th><td>Contexto completo: {process_complete}/{process_total} · rutas: {paths} · usuarios: {users} · command lines: {cmdlines} · padres: {parents} · protegidos: {protected}</td></tr>
+      <tr><th>Identidad</th><td>Completa: {identity_complete}/{process_total} · hash fresh: {hash_fresh} · cache: {hash_cache} · no disponible: {hash_missing} · trust resuelto: {trust_resolved} · unknown: {trust_unknown}</td></tr>
+      <tr><th>DNS</th><td>IPs públicas: {dns_candidates} · cache hits: {dns_cache} · resueltas: {dns_resolved} · sin PTR: {dns_no_ptr} · timeout: {dns_timeout}</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Limitaciones conocidas</strong></p>
+  <ul>{limitations}</ul>
+  <p><strong>Advertencias</strong></p>
+  <ul>{warnings}</ul>
+</div>"#,
+            status = escape_html(&coverage.status),
+            elevated = elevated,
+            tcp4 = yes_no(coverage.collector.tcp_ipv4_collected),
+            tcp6 = yes_no(coverage.collector.tcp_ipv6_collected),
+            tcp_total = coverage.collector.tcp_observations,
+            udp4 = yes_no(coverage.collector.udp_ipv4_collected),
+            udp6 = yes_no(coverage.collector.udp_ipv6_collected),
+            udp_endpoints = coverage.collector.udp_owner_endpoints,
+            udp_findings = coverage.collector.udp_findings,
+            process_complete = coverage.process.complete_context,
+            process_total = coverage.process.findings,
+            paths = coverage.process.path_resolved,
+            users = coverage.process.user_resolved,
+            cmdlines = coverage.process.command_line_resolved,
+            parents = coverage.process.parent_resolved,
+            protected = coverage.process.protected_system_findings,
+            identity_complete = coverage.identity.complete_identity,
+            hash_fresh = coverage.identity.hash_fresh,
+            hash_cache = coverage.identity.hash_cache,
+            hash_missing = coverage.identity.hash_unavailable,
+            trust_resolved = coverage.identity.trust_resolved,
+            trust_unknown = coverage.identity.trust_unknown,
+            dns_candidates = coverage.dns.public_ip_candidates,
+            dns_cache = coverage.dns.cache_hits,
+            dns_resolved = coverage.dns.resolved,
+            dns_no_ptr = coverage.dns.no_ptr_record,
+            dns_timeout = coverage.dns.timed_out,
+            limitations = limitations,
+            warnings = warnings,
         )
     }
 
@@ -186,6 +278,14 @@ fn escape_html(input: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+fn yes_no(value: bool) -> &'static str {
+    if value {
+        "sí"
+    } else {
+        "no"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,14 +294,14 @@ mod tests {
     fn sample_response() -> ScanNowResponse {
         ScanNowResponse {
             scan_id: "SCAN-1".to_string(),
-            schema_version: "v1".to_string(),
+            schema_version: "v2".to_string(),
             started_at: "2026-07-09T10:00:00Z".to_string(),
             finished_at: "2026-07-09T10:00:05Z".to_string(),
             duration_ms: 5000,
             host: HostInfo {
                 platform: "windows".to_string(),
                 hostname: "TEST-PC".to_string(),
-                app_version: "0.5.0".to_string(),
+                app_version: "1.0.0".to_string(),
             },
             summary: ScanSummary {
                 total_observations: 1,
@@ -213,6 +313,45 @@ mod tests {
                 revalidation_count: 0,
                 orphaned_count: 0,
             },
+            coverage: Some(ScanCoverage {
+                status: "partial".to_string(),
+                elevated: Some(false),
+                collector: CollectorCoverage {
+                    tcp_ipv4_collected: true,
+                    tcp_ipv6_collected: true,
+                    tcp_observations: 1,
+                    udp_ipv4_collected: true,
+                    udp_ipv6_collected: true,
+                    udp_owner_endpoints: 4,
+                    udp_findings: 0,
+                },
+                process: ProcessCoverage {
+                    findings: 1,
+                    protected_system_findings: 0,
+                    complete_context: 0,
+                    path_resolved: 1,
+                    user_resolved: 0,
+                    command_line_resolved: 0,
+                    parent_resolved: 0,
+                },
+                identity: IdentityCoverage {
+                    complete_identity: 1,
+                    hash_fresh: 1,
+                    hash_cache: 0,
+                    hash_unavailable: 0,
+                    trust_resolved: 1,
+                    trust_unknown: 0,
+                },
+                dns: DnsCoverage {
+                    public_ip_candidates: 1,
+                    cache_hits: 0,
+                    resolved: 0,
+                    no_ptr_record: 1,
+                    timed_out: 0,
+                },
+                limitations: vec!["POINT_IN_TIME_SNAPSHOT".to_string()],
+                warnings: vec![],
+            }),
             findings: vec![Finding {
                 finding_id: "FND-1".to_string(),
                 protocol: "TCP".to_string(),
@@ -301,6 +440,9 @@ mod tests {
         assert!(html.contains("UNKNOWN_BASELINE"));
         assert!(html.contains("observe"));
         assert!(html.contains("C:\\Program Files\\App\\app.exe"));
+        assert!(html.contains("Completitud del scan"));
+        assert!(html.contains("Estado de evidencia: partial"));
+        assert!(html.contains("POINT_IN_TIME_SNAPSHOT"));
     }
 
     #[test]
@@ -333,5 +475,18 @@ mod tests {
         assert_eq!(parsed.findings.len(), 1);
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn legacy_v1_export_does_not_invent_coverage() {
+        let mut response = sample_response();
+        response.schema_version = "v1".to_string();
+        response.coverage = None;
+
+        let json = serde_json::to_value(&response).unwrap();
+        assert!(json.get("coverage").is_none());
+        let html = Exporter::render_html(&response);
+        assert!(html.contains("No disponible"));
+        assert!(html.contains("no registraba cobertura"));
     }
 }

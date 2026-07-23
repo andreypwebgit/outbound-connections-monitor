@@ -1,4 +1,5 @@
 import { escapeHtml, formatDate } from './html.js';
+import { renderCoverage } from './coverage.js';
 
 /**
  * Bloque de resumen del scan: contadores del summary del contrato + metadatos.
@@ -59,6 +60,7 @@ export function renderSummary(scan, isHistorical, comparison) {
         ${chip('Revalidación', s.revalidation_count, 'text-orange-300')}
         ${chip('Huérfanos', s.orphaned_count, s.orphaned_count > 0 ? 'text-red-400' : 'text-gray-300')}
       </div>
+      ${renderCoverage(scan)}
       ${comparisonBlock}
       <div class="mt-4 flex gap-2 justify-end text-xs">
         <button data-action="export" data-format="json" class="px-3 py-1.5 rounded border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors">Exportar JSON</button>
