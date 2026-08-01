@@ -73,8 +73,8 @@ El proyecto está diseñado bajo estrictos requerimientos de simplicidad operati
     SBOM y attestation antes de publicar. Los binarios se declaran
     explícitamente unsigned; la integridad y procedencia no se presentan como
     sustituto de una firma de editor.
-*   **Tests del dominio crítico:** 101 tests (80 unitarios, 11 de contrato y
-    10 de integración SQLite), incluidos collector degradado, reglas de
+*   **Tests del dominio crítico:** 102 tests (80 unitarios, 11 de contrato y
+    11 de integración SQLite), incluidos collector degradado, reglas de
     completitud, exportación y compatibilidad histórica v1/v2; CI añade
     `cargo fmt --check` y Clippy sin warnings.
 

@@ -451,3 +451,19 @@ En debug, `tauri-plugin-log` escribe solo en stdout. El destino de archivo
 predeterminado podía devolver `Access denied` en perfiles restringidos y
 abortaba `npx tauri dev`; el terminal ya proporciona el log necesario y no
 debe convertir el logging auxiliar en requisito de arranque.
+
+## 17. Mantenimiento de dependencias posterior a v1.0.0
+
+- Las acciones de CI/release permanecen fijadas por SHA y se actualizan a sus
+  revisiones mantenidas; `checkout`, `setup-node` y `action-gh-release` pasan
+  a runtimes Node 24 compatibles con los runners hospedados de GitHub.
+- Tailwind CSS y su CLI se actualizan conjuntamente a 4.3.3 y se regenera el
+  CSS versionado para mantener fuente y artefacto alineados.
+- `rusqlite` pasa de 0.31 a 0.40 con SQLite bundled actualizado. Como esa
+  versión ya no implementa `ToSql` para `u64`, `duration_ms` se convierte de
+  forma comprobada a `i64` antes de persistir; un valor fuera del rango real
+  de `INTEGER` se rechaza explícitamente.
+- `sha2`, `serde`, `serde_json` y `tauri-plugin-log` se actualizan sin alterar
+  el contrato `scan_now`, el esquema SQLite ni el comportamiento del motor.
+- La suite queda en 102 tests: 80 unitarios, 11 de contrato y 11 de
+  integración SQLite.

@@ -175,6 +175,7 @@ fn scan_roundtrip_preserves_full_contract_payload() {
 
     // El scan restaurado es fiel al original (base del export reproducible).
     assert_eq!(restored.scan_id, response.scan_id);
+    assert_eq!(restored.duration_ms, response.duration_ms);
     assert_eq!(restored.findings.len(), 1);
     let f = &restored.findings[0];
     assert_eq!(
@@ -191,6 +192,25 @@ fn scan_roundtrip_preserves_full_contract_payload() {
             .map(|coverage| coverage.status.as_str()),
         Some("complete")
     );
+}
+
+#[test]
+fn scan_duration_outside_sqlite_integer_range_is_rejected() {
+    let storage = Storage::new_in_memory().unwrap();
+    let mut response = minimal_response("SCAN-DURATION-OVERFLOW", "2026-07-09T10:15:00+00:00");
+    response.duration_ms = u64::MAX;
+
+    let error = storage
+        .save_scan_results(&response)
+        .expect_err("out-of-range duration must be rejected");
+
+    assert!(error
+        .to_string()
+        .contains("duration_ms exceeds the SQLite INTEGER range"));
+    assert!(storage
+        .get_scan_response("SCAN-DURATION-OVERFLOW")
+        .expect("query ok")
+        .is_none());
 }
 
 #[test]
