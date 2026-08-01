@@ -1,6 +1,6 @@
 {
   "name": "out-cxns-monitor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Aplicación de escritorio para **Windows** orientada a dar **visibilidad humana, contexto técnico y priorización de riesgo** sobre las **conexiones salientes activas** del equipo mediante un flujo **manual** de escaneo con `Scan Now`.",
   "main": "index.js",
   "directories": {

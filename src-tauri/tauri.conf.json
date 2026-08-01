@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "out-cxns-monitor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "identifier": "com.apwebai.out-cxns-monitor",
   "build": {
     "frontendDist": "../src",

@@ -129,7 +129,7 @@ ejecuta además validación de versiones, auditoría npm, build de Tailwind,
 `cargo fmt --check` y
 `cargo clippy --locked --all-targets -- -D warnings`.
 
-Mantenimiento posterior a v1.0.0: **102 tests** (80 unitarios + 11 de
+Suite v1.0.1: **102 tests** (80 unitarios + 11 de
 contrato + 11 de integración SQLite). El caso adicional valida la conversión
 segura de `duration_ms` al rango entero de SQLite con `rusqlite` 0.40.
 

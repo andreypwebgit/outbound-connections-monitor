@@ -78,6 +78,17 @@ remediación e intel externo obligatorio.
 Se mantienen fuera por diseño: monitorización continua, bloqueo,
 remediación, packet capture e intel externo obligatorio.
 
+## v1.0.1 — mantenimiento
+
+- actualización compatible de dependencias Rust, Tauri/Tailwind y acciones
+  de GitHub fijadas por commit;
+- validación explícita del rango SQLite para `duration_ms` con regresión de
+  integración;
+- cinco fuentes de versión sincronizadas, incluidos ambos lockfiles;
+- 102 tests en verde y política de publicación unsigned conservada;
+- sin cambios en el contrato `scan_now` v2, scoring, baseline, cobertura ni
+  esquema SQLite.
+
 ## Regla de roadmap
 
 El proyecto debe crecer por capas y necesidad explícita, no por anticipación.
