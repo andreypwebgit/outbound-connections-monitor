@@ -10,7 +10,7 @@
 Analizador local y bajo demanda de conexiones salientes para Windows, estable,
 explicable y transparente sobre la cobertura real de cada escaneo.
 
-> **⚠️ Aviso de firma:** el ejecutable, MSI y NSIS de v1.0.0 no están firmados
+> **⚠️ Aviso de firma:** los binarios oficiales v1.x no están firmados
 > con Authenticode. Windows puede mostrar `Editor desconocido` o una
 > advertencia de SmartScreen. Descarga OCM únicamente desde la
 > [release oficial](https://github.com/andreypwebgit/outbound-connections-monitor/releases/latest)
@@ -133,7 +133,10 @@ Aunque OCM ya ofrece capacidades tácticas potentes, estas son algunas rutas par
 *   ✅ **Hecho en v1.0.0** — tag exacto y manifiestos sincronizados, acciones
     fijadas por commit, build y tests en Windows 2022, SBOM SPDX, checksums
     SHA-256 y attestation de procedencia como gates obligatorios. La release
-    v1.0.0 se publica sin firma Authenticode y lo declara de forma visible.
+    v1.x se publica sin firma Authenticode y lo declara de forma visible.
+*   ✅ **Mantenimiento v1.0.1** — dependencias de aplicación y acciones
+    actualizadas, lockfiles sincronizados y suite ampliada a 102 tests, sin
+    alterar el contrato `scan_now` v2 ni el comportamiento funcional.
 
 ### 6. Transparencia de cobertura
 *   ✅ **Hecho en v1.0.0** — panel y contrato de completitud de evidencia con

@@ -87,7 +87,9 @@ $readme = Get-Content -Raw (Join-Path $repoRoot "README.md")
 $security = Get-Content -Raw (Join-Path $repoRoot "SECURITY.md")
 $distribution = Get-Content -Raw (Join-Path $repoRoot "docs\build-and-distribution.md")
 Assert-Contains -Text $readme -Fragment "no están firmados" -Context "README.md"
+Assert-Contains -Text $readme -Fragment "binarios oficiales v1.x" -Context "README.md"
 Assert-Contains -Text $security -Fragment "Authenticode-signed" -Context "SECURITY.md"
 Assert-Contains -Text $distribution -Fragment "no están firmados con Authenticode" -Context "docs/build-and-distribution.md"
+Assert-Contains -Text $distribution -Fragment "binarios oficiales v1.x" -Context "docs/build-and-distribution.md"
 
 Write-Output "Politica de release unsigned validada: version, workflow, artefactos y documentacion."

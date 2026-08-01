@@ -34,7 +34,7 @@ attestation o publicación detiene el workflow.
 
 ## Política de firma de la release
 
-Los binarios oficiales v1.0.0 no están firmados con Authenticode porque el
+Los binarios oficiales v1.x no están firmados con Authenticode porque el
 proyecto no dispone de un certificado de firma de código público. El workflow
 no solicita credenciales Azure, no descarga clientes de firma y no presenta
 checksums o attestations como si fueran una identidad de editor.
@@ -116,7 +116,7 @@ modelo).
 
 ## Firma, SmartScreen y verificación
 
-El ejecutable, MSI y NSIS de v1.0.0 no están firmados con Authenticode.
+El ejecutable, MSI y NSIS oficiales v1.x no están firmados con Authenticode.
 Windows puede mostrar `Editor desconocido` o una advertencia de SmartScreen.
 No debe recomendarse ignorar la advertencia: antes de ejecutar hay que
 comprobar que el archivo procede de la release oficial, que su SHA-256 coincide
@@ -191,3 +191,20 @@ Validación local v1.0.0 realizada el 2026-07-23:
   Windows esté habilitada. La release oficial se construye en
   `windows-2022`, donde el workflow debe producir ambos formatos antes de
   publicar.
+
+Validación local v1.0.1 realizada el 2026-08-01:
+
+- versiones y tag `v1.0.1` sincronizados; política de release unsigned en
+  verde;
+- `npm ci`, `npm audit --audit-level=high` y build Tailwind 4.3.3 en verde,
+  con cero vulnerabilidades;
+- `cargo fmt --check`, Clippy con warnings como error y 102 tests en verde;
+- `npx tauri build --no-bundle --ci`: ejecutable release 1.0.1 generado;
+- `npx tauri bundle --bundles nsis --ci`:
+  `out-cxns-monitor_1.0.1_x64-setup.exe` generado;
+- `npx tauri dev`: compilación debug 1.0.1, ventana
+  `Outbound Connections Monitor` abierta y respondiendo, seguida de cierre
+  controlado.
+
+El MSI se mantiene como gate remoto: el workflow de release en
+`windows-2022` debe producir ejecutable, MSI y NSIS antes de publicar.

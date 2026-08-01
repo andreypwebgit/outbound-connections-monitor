@@ -467,3 +467,17 @@ debe convertir el logging auxiliar en requisito de arranque.
   el contrato `scan_now`, el esquema SQLite ni el comportamiento del motor.
 - La suite queda en 102 tests: 80 unitarios, 11 de contrato y 11 de
   integración SQLite.
+
+## 18. v1.0.1 de mantenimiento
+
+v1.0.1 distribuye el mantenimiento de dependencias integrado después de
+v1.0.0. Es una release de parche: no modifica el contrato `scan_now` v2, el
+modelo de identidad, el lifecycle de baseline, afinidad, scoring, cobertura
+ni el esquema SQLite.
+
+La versión se sincroniza en `package.json`, `package-lock.json`,
+`src-tauri/Cargo.toml`, la entrada `app` de `src-tauri/Cargo.lock` y
+`src-tauri/tauri.conf.json`. La documentación de firma pasa a referirse a las
+releases v1.x para que futuros parches no puedan dejar un aviso principal
+obsoleto. La distribución sigue siendo deliberadamente unsigned: checksum,
+SBOM y attestation aportan integridad y procedencia, no identidad de editor.
