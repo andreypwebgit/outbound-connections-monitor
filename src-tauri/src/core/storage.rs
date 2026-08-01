@@ -615,6 +615,9 @@ impl Storage {
         let raw_json = serde_json::to_string(response).map_err(|e| {
             AppError::SystemError(format!("Failed to serialize scan for persistence: {}", e))
         })?;
+        let duration_ms = i64::try_from(response.duration_ms).map_err(|_| {
+            AppError::SystemError("Scan duration_ms exceeds the SQLite INTEGER range".to_string())
+        })?;
 
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction()?;
@@ -626,7 +629,7 @@ impl Storage {
                 response.scan_id,
                 response.started_at,
                 response.finished_at,
-                response.duration_ms,
+                duration_ms,
                 response.host.app_version,
                 response.host.hostname,
                 raw_json,
