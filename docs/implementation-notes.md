@@ -481,3 +481,26 @@ La versión se sincroniza en `package.json`, `package-lock.json`,
 releases v1.x para que futuros parches no puedan dejar un aviso principal
 obsoleto. La distribución sigue siendo deliberadamente unsigned: checksum,
 SBOM y attestation aportan integridad y procedencia, no identidad de editor.
+
+## 19. Hardening final de GitHub
+
+El repositorio aplica defensa en profundidad sin modificar el producto ni sus
+dependencias:
+
+- CodeQL avanzado analiza Rust y JavaScript/TypeScript con `build-mode: none`
+  en PR, push a `main`, ejecución semanal y despacho manual;
+- el workflow usa permisos mínimos (`contents: read` y
+  `security-events: write`) y acciones fijadas por SHA completa;
+- Dependabot Alerts y Dependabot security updates se habilitan en la
+  configuración del repositorio, manteniendo `dependabot.yml` para propuestas
+  revisables de Actions, Cargo y npm;
+- el ruleset activo de `main` exige el build/test de Windows y los dos checks
+  de CodeQL, además de conservar la prohibición de force-push/borrado y la
+  integración exclusiva por PR con conversaciones resueltas;
+- `scripts/test-github-hardening.ps1` protege en CI la parte declarativa que
+  vive en el repositorio. Los ajustes remotos se verifican mediante la API de
+  GitHub tras integrarlos.
+
+CodeQL no reemplaza la suite funcional y sus resultados no se presentan como
+prueba de ausencia de vulnerabilidades. Dependabot no integra cambios de forma
+automática: cada actualización sigue pasando por los gates obligatorios.

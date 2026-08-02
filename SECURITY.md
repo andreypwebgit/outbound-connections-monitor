@@ -37,3 +37,19 @@ an exact `vX.Y.Z` tag. The workflow:
 - generates a GitHub artifact attestation tied to the source commit.
 
 If any of these gates fails, the release must not be treated as official.
+
+## Repository security controls
+
+Changes to `main` go through a pull request and must pass the Windows build and
+test job plus CodeQL analysis for Rust and JavaScript/TypeScript. The repository
+also enables:
+
+- Dependabot alerts and automatic security update pull requests;
+- scheduled version update pull requests for GitHub Actions, Cargo and npm;
+- secret scanning and push protection;
+- GitHub rules that reject branch deletion, force-pushes and merges with
+  unresolved review threads or failing required checks.
+
+GitHub Actions are pinned to complete commit SHAs. Dependabot proposes their
+updates as reviewable pull requests; no dependency update is merged
+automatically.
