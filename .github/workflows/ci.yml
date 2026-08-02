@@ -28,11 +28,12 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Validate synchronized versions and release policy
+      - name: Validate synchronized versions and repository policies
         shell: pwsh
         run: |
           .\scripts\validate-release.ps1
           .\scripts\test-release-pipeline.ps1
+          .\scripts\test-github-hardening.ps1
 
       - name: Install frontend dependencies
         run: npm ci

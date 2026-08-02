@@ -4,6 +4,7 @@
 [![Licencia](https://img.shields.io/badge/Licencia-MIT-green?style=for-the-badge)](LICENSE)
 [![Descargas](https://img.shields.io/github/v/release/andreypwebgit/outbound-connections-monitor?style=for-the-badge&label=Descargas&color=orange)](https://github.com/andreypwebgit/outbound-connections-monitor/releases/latest)
 [![CI](https://github.com/andreypwebgit/outbound-connections-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/andreypwebgit/outbound-connections-monitor/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/andreypwebgit/outbound-connections-monitor/actions/workflows/codeql.yml/badge.svg)](https://github.com/andreypwebgit/outbound-connections-monitor/actions/workflows/codeql.yml)
 
 **Web oficial: [https://ocm.apwebai.es/](https://ocm.apwebai.es/)** — información del proyecto, guía de uso y descargas.
 
@@ -73,6 +74,10 @@ El proyecto está diseñado bajo estrictos requerimientos de simplicidad operati
     SBOM y attestation antes de publicar. Los binarios se declaran
     explícitamente unsigned; la integridad y procedencia no se presentan como
     sustituto de una firma de editor.
+*   **Hardening del repositorio:** `main` exige CI y análisis CodeQL en verde;
+    CodeQL revisa Rust y JavaScript/TypeScript en cada PR, push a `main` y de
+    forma semanal. Dependabot Alerts y sus actualizaciones de seguridad
+    complementan las revisiones periódicas de Actions, Cargo y npm.
 *   **Tests del dominio crítico:** 102 tests (80 unitarios, 11 de contrato y
     11 de integración SQLite), incluidos collector degradado, reglas de
     completitud, exportación y compatibilidad histórica v1/v2; CI añade

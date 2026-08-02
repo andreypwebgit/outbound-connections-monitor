@@ -94,6 +94,21 @@ Validar:
 - aviso unsigned coherente en workflow, README, SECURITY y documentación de
   distribución.
 
+### 11. Hardening del repositorio
+
+`scripts/test-github-hardening.ps1` valida que:
+
+- CodeQL cubra Rust y JavaScript/TypeScript en push, pull request y ejecución
+  programada, usando `pull_request` para mantener segura la ejecución de PR;
+- todos los usos de GitHub Actions permanezcan fijados a SHA completa;
+- el check estable `Build & test (Windows)` y el propio test de política sigan
+  presentes en CI;
+- Dependabot mantenga cobertura de GitHub Actions, Cargo y npm.
+
+GitHub ejecuta CodeQL en modo `none`, soportado para Rust y lenguajes
+interpretados: es análisis estático complementario. No sustituye el build,
+Clippy, la suite Rust ni las pruebas funcionales que se ejecutan en Windows.
+
 ## Escenarios mínimos obligatorios
 
 1. proceso firmado, hash conocido y destino habitual;
@@ -128,6 +143,11 @@ integración SQLite), más el test de política del pipeline de release. CI
 ejecuta además validación de versiones, auditoría npm, build de Tailwind,
 `cargo fmt --check` y
 `cargo clippy --locked --all-targets -- -D warnings`.
+
+CI ejecuta además el test local de hardening del repositorio. CodeQL mantiene
+dos checks independientes, `Analyze (rust)` y
+`Analyze (javascript-typescript)`, para que la protección de `main` pueda
+exigir cobertura explícita de ambos lenguajes.
 
 Suite v1.0.1: **102 tests** (80 unitarios + 11 de
 contrato + 11 de integración SQLite). El caso adicional valida la conversión
