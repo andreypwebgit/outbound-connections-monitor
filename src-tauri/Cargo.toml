@@ -27,4 +27,4 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 chrono = { version = "0.4", features = ["serde"] }
 sha2 = "0.11"
 hex = "0.4"
-dns-lookup = "2.0"
+dns-lookup = "4.0"
