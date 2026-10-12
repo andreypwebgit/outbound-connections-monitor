@@ -497,6 +497,10 @@ dependencias:
 - el ruleset activo de `main` exige el build/test de Windows y los dos checks
   de CodeQL, además de conservar la prohibición de force-push/borrado y la
   integración exclusiva por PR con conversaciones resueltas;
+- desde el 12/10/2026, por decisión del propietario, las deploy keys están en
+  la lista de bypass de ese ruleset («Always allow»): las herramientas del
+  mantenedor suben directamente a `main` sin PR. Los checks se siguen
+  ejecutando en cada push y se revisan después, y nunca se hace force-push;
 - `scripts/test-github-hardening.ps1` protege en CI la parte declarativa que
   vive en el repositorio. Los ajustes remotos se verifican mediante la API de
   GitHub tras integrarlos.

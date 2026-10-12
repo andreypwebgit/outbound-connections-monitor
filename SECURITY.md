@@ -41,14 +41,18 @@ If any of these gates fails, the release must not be treated as official.
 ## Repository security controls
 
 Changes to `main` go through a pull request and must pass the Windows build and
-test job plus CodeQL analysis for Rust and JavaScript/TypeScript. The repository
-also enables:
+test job plus CodeQL analysis for Rust and JavaScript/TypeScript. The only
+exception is the repository's deploy keys: since 2026-10-12, by the owner's
+decision, the `main` ruleset lets them push directly. That path is used only by
+the maintainer's own tooling, never force-pushes, and its pushes still run the
+same checks, which are reviewed after every push. The repository also enables:
 
 - Dependabot alerts and automatic security update pull requests;
 - scheduled version update pull requests for GitHub Actions, Cargo and npm;
 - secret scanning and push protection;
 - GitHub rules that reject branch deletion, force-pushes and merges with
-  unresolved review threads or failing required checks.
+  unresolved review threads or failing required checks (deploy keys excepted,
+  as described above).
 
 GitHub Actions are pinned to complete commit SHAs. Dependabot proposes their
 updates as reviewable pull requests; no dependency update is merged
